@@ -26,6 +26,7 @@ import {
 import { materializeContainerJson } from './container-config.js';
 import { getContainerConfig } from './db/container-configs.js';
 import { updateContainerConfigScalars } from './db/container-configs.js';
+import { CONTAINER_UID, ensureContainerWritable } from './container-ownership.js';
 import { CONTAINER_RUNTIME_BIN, hostGatewayArgs, readonlyMountArgs, stopContainer } from './container-runtime.js';
 import { EGRESS_NETWORK, egressNetworkArgs, ensureEgressNetwork } from './egress-lockdown.js';
 import { composeGroupClaudeMd } from './claude-md-compose.js';
@@ -316,6 +317,13 @@ export function buildMounts(
   const sessDir = sessionDir(agentGroup.id, session.id);
   const groupDir = path.resolve(GROUPS_DIR, agentGroup.folder);
 
+  // Re-own NanoClaw-created RW trees to the container's `node` user before
+  // mounting — no-op unless the host process runs as root. See
+  // container-ownership.ts for why this is needed.
+  ensureContainerWritable(sessDir);
+  ensureContainerWritable(groupDir);
+  if (defaultSurfaces) ensureContainerWritable(claudeDir);
+
   // Session folder at /workspace (contains inbound.db, outbound.db, outbox/, .claude/)
   mounts.push({ hostPath: sessDir, containerPath: '/workspace', readonly: false });
 
@@ -503,7 +511,7 @@ async function buildContainerArgs(
   // User mapping
   const hostUid = process.getuid?.();
   const hostGid = process.getgid?.();
-  if (hostUid != null && hostUid !== 0 && hostUid !== 1000) {
+  if (hostUid != null && hostUid !== 0 && hostUid !== CONTAINER_UID) {
     args.push('--user', `${hostUid}:${hostGid}`);
     args.push('-e', 'HOME=/home/node');
   }
