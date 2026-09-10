@@ -1,5 +1,0 @@
-# Vite build output — public/ is now purely a build artifact (Express's
-# static-serve target), not hand-written source. Source lives in web/.
-/public/
-
-node_modules/

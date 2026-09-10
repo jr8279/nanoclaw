@@ -1,6 +1,7 @@
 /**
  * Todo MCP server for NanoClaw
- * Exposes the self-hosted nanoclaw-todo app (apps/todo/) as tools for the
+ * Exposes the self-hosted nanoclaw-todo app (github.com/jr8279/todo-list,
+ * a standalone repo/deployment) as tools for the
  * container agent — list, create, complete, reopen, update and delete tasks,
  * plus category and household-member lookup. Talks to the todo app's REST
  * API over host.docker.internal (the todo app runs on the host/KVM, not

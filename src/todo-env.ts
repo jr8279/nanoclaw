@@ -2,7 +2,8 @@
  * Host-side env forwarding for the Todo MCP tool. Returns the Docker `-e`
  * arguments that pass the host's todo-app configuration into the container.
  *
- * TODO_API_URL is the base URL of the nanoclaw-todo app (apps/todo/); its
+ * TODO_API_URL is the base URL of the nanoclaw-todo app (github.com/jr8279/todo-list,
+ * a standalone repo/deployment — nanoclaw only talks to it over HTTP); its
  * presence is also what gates registering the MCP server in the container
  * (see container/agent-runner/src/index.ts). TODO_API_KEY is forwarded only
  * if the todo app is running with a key configured.
