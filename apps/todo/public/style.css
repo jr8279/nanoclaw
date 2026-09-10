@@ -210,22 +210,33 @@ body::before {
 /* --- filters: literal folder tabs, not pill chips -------------------- */
 
 .filters { margin-bottom: 18px; }
-.tab-row { display: flex; flex-wrap: wrap; gap: 2px; margin-bottom: 6px; }
-.tab {
-  border: 1px solid var(--rule);
-  border-bottom: none;
-  background: var(--paper-2);
-  color: var(--ink-soft);
+/* Plain text + a color dot, not a shape — an earlier clip-path "folder
+   tab" version read as literal plastic index tabs rather than an app
+   control. Color still carries the category identity (the dot), it just
+   isn't spent on a skeuomorphic container anymore. */
+.tab-row { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-bottom: 10px; }
+.category-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: none;
+  color: var(--ink-faint);
   font-family: inherit;
   font-size: 0.82rem;
-  padding: 7px 14px 8px;
+  padding: 2px 0;
   cursor: pointer;
-  clip-path: polygon(8% 0, 92% 0, 100% 100%, 0% 100%);
-  margin-bottom: -1px;
-  transition: transform 0.1s ease, background 0.12s ease, color 0.12s ease;
+  transition: color 0.12s ease, transform 0.1s ease;
 }
-.tab.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
-.tab:active { transform: scale(0.96); }
+.category-filter .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dot, var(--ink-faint));
+  flex: 0 0 auto;
+}
+.category-filter.active { color: var(--ink); font-weight: 600; }
+.category-filter:active { transform: scale(0.94); }
 .status-row { display: flex; gap: 16px; border-bottom: 1px solid var(--rule); padding-bottom: 8px; }
 .status-tab {
   border: none;

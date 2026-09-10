@@ -66,15 +66,15 @@ async function loadUsers() {
 
 function renderCategoryChips() {
   const row = document.getElementById('categoryChips');
-  const all = `<button class="tab ${state.categoryFilter === null ? 'active' : ''}" data-cat="">All</button>`;
+  const all = `<button class="category-filter ${state.categoryFilter === null ? 'active' : ''}" data-cat="">All</button>`;
   const tabs = state.categories
     .map(
       (c) =>
-        `<button class="tab ${state.categoryFilter === c.id ? 'active' : ''}" data-cat="${c.id}">${escapeHtml(c.name)}</button>`,
+        `<button class="category-filter ${state.categoryFilter === c.id ? 'active' : ''}" data-cat="${c.id}" style="--dot:${c.color}"><span class="dot"></span>${escapeHtml(c.name)}</button>`,
     )
     .join('');
   row.innerHTML = all + tabs;
-  row.querySelectorAll('.tab').forEach((btn) => {
+  row.querySelectorAll('.category-filter').forEach((btn) => {
     btn.addEventListener('click', () => {
       state.categoryFilter = btn.dataset.cat ? Number(btn.dataset.cat) : null;
       localStorage.setItem('todoCategoryFilter', state.categoryFilter ?? '');
