@@ -103,13 +103,20 @@ body::before {
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  padding: calc(env(safe-area-inset-top) + 22px) 0 6px;
+  /* Bleeds edge-to-edge past #app's own side padding (negative margin,
+     compensating padding) rather than sitting inset within the page
+     content — an inset "section header" is what read as webpage-flat;
+     nav bars in real apps span the full width and float above the
+     content, which is also why this gets blur instead of a flat fill. */
+  padding: calc(env(safe-area-inset-top) + 22px) 20px 14px;
+  margin: 0 -20px 14px;
   position: sticky;
   top: 0;
-  background: var(--paper);
+  background: color-mix(in srgb, var(--paper) 80%, transparent);
+  backdrop-filter: blur(16px) saturate(1.5);
+  -webkit-backdrop-filter: blur(16px) saturate(1.5);
   z-index: 5;
   border-bottom: 1px solid var(--rule);
-  margin-bottom: 14px;
 }
 .topbar-heading { display: flex; flex-direction: column; gap: 2px; padding-bottom: 12px; }
 .topbar h1 {
