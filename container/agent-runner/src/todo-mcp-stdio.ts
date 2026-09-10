@@ -86,7 +86,10 @@ server.tool(
 
 server.tool(
   'todo_create_task',
-  'Create a new todo task. Use todo_list_categories first if you need a category_id. For recurring tasks, set recurrence_freq and optionally recurrence_interval.',
+  'Create a new todo task. Use todo_list_categories first if you need a category_id. ' +
+    'For recurring tasks, set recurrence_freq (and optionally recurrence_interval) — ' +
+    'this requires due_date to be set too, since recurrence is anchored on it. ' +
+    'Link URLs must be http:// or https:// (or mailto:) — anything else is rejected.',
   {
     title: z.string(),
     notes: z.string().optional(),
@@ -98,7 +101,7 @@ server.tool(
     links: z
       .array(z.object({ url: z.string(), label: z.string().optional() }))
       .optional()
-      .describe('Reference links, e.g. a portal URL or document'),
+      .describe('Reference links (http/https/mailto only), e.g. a portal URL or document'),
   },
   async ({ recurrence_freq, recurrence_interval, ...rest }) => {
     const payload = {

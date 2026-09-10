@@ -1,8 +1,10 @@
 const state = {
   categories: [],
   tasks: [],
-  statusFilter: 'pending',
-  categoryFilter: null,
+  statusFilter: localStorage.getItem('todoStatusFilter') || 'pending',
+  categoryFilter: localStorage.getItem('todoCategoryFilter')
+    ? Number(localStorage.getItem('todoCategoryFilter'))
+    : null,
 };
 
 function apiKey() {
@@ -61,6 +63,7 @@ function renderCategoryChips() {
   row.querySelectorAll('.chip').forEach((btn) => {
     btn.addEventListener('click', () => {
       state.categoryFilter = btn.dataset.cat ? Number(btn.dataset.cat) : null;
+      localStorage.setItem('todoCategoryFilter', state.categoryFilter ?? '');
       renderCategoryChips();
       loadTasks();
     });
@@ -84,11 +87,12 @@ function renderTasks() {
   list.innerHTML = state.tasks
     .map((task) => {
       const cat = categoryById(task.category_id);
+      const overdue = isOverdue(task);
       const classes = [
         'task-card',
         `importance-${task.importance}`,
         task.status === 'completed' ? 'completed' : '',
-        isOverdue(task) ? 'overdue' : '',
+        overdue ? 'overdue' : '',
       ]
         .filter(Boolean)
         .join(' ');
@@ -96,12 +100,24 @@ function renderTasks() {
       const links = task.links
         .map((l) => `<a href="${escapeAttr(l.url)}" target="_blank" rel="noopener">${escapeHtml(l.label || l.url)}</a>`)
         .join('');
+      // Color alone isn't enough to signal importance/overdue (colorblind users,
+      // quick scanning) — back it with a text badge too.
+      const importanceBadge =
+        task.importance === 'urgent'
+          ? '<span class="badge urgent">Urgent</span>'
+          : task.importance === 'high'
+            ? '<span class="badge high">High</span>'
+            : '';
+      const overdueBadge = overdue ? '<span class="badge overdue">Overdue</span>' : '';
+      const checkLabel = task.status === 'completed' ? 'Mark incomplete' : 'Mark complete';
       return `
         <div class="${classes}" data-id="${task.id}">
-          <button class="task-check" data-toggle="${task.id}" aria-label="toggle"></button>
+          <button class="task-check" data-toggle="${task.id}" aria-label="${checkLabel}" aria-pressed="${task.status === 'completed'}"></button>
           <div class="task-body" data-edit="${task.id}">
             <div class="task-title">${escapeHtml(task.title)}</div>
             <div class="task-meta">
+              ${importanceBadge}
+              ${overdueBadge}
               ${cat ? `<span class="cat" style="background:${cat.color}22;color:${cat.color}">${escapeHtml(cat.name)}</span>` : ''}
               ${due ? `<span class="due">${task.recurrence ? '↻ ' : ''}Due ${due}</span>` : task.recurrence ? '<span>↻ recurring</span>' : ''}
             </div>
@@ -136,9 +152,16 @@ function escapeAttr(str) {
 // --- dialog -------------------------------------------------------------
 
 const dialog = document.getElementById('taskDialog');
+const formError = document.getElementById('formError');
+
+function showFormError(message) {
+  formError.textContent = message;
+  formError.hidden = !message;
+}
 
 function openDialog(id) {
   const task = id ? state.tasks.find((t) => t.id === id) : null;
+  showFormError('');
   document.getElementById('dialogTitle').textContent = task ? 'Edit task' : 'New task';
   document.getElementById('taskId').value = task ? task.id : '';
   document.getElementById('fTitle').value = task ? task.title : '';
@@ -158,24 +181,35 @@ function toLocalInput(iso) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+const LINK_URL_RE = /^https?:\/\/\S+$/i;
+
+// Only a token that actually looks like a URL is accepted as one — a line
+// with no http(s) URL in it is dropped rather than guessed at (the old
+// behavior invented a link from whatever word happened to be last).
 function parseLinks(text) {
-  return text
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const parts = line.split(/\s+/);
-      const url = parts.find((p) => /^https?:\/\//.test(p)) || parts[parts.length - 1];
-      const label = line.replace(url, '').trim() || null;
-      return { url, label };
-    })
-    .filter((l) => l.url);
+  const links = [];
+  for (const rawLine of text.split('\n')) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const parts = line.split(/\s+/);
+    const url = parts.find((p) => LINK_URL_RE.test(p));
+    if (!url) continue;
+    const label = line.replace(url, '').trim() || null;
+    links.push({ url, label });
+  }
+  return links;
 }
 
 document.getElementById('addBtn').addEventListener('click', () => openDialog(null));
 document.getElementById('cancelBtn').addEventListener('click', () => dialog.close());
 
 document.getElementById('taskForm').addEventListener('submit', async (e) => {
+  // Native <form method="dialog"> closes the dialog as part of this same
+  // event regardless of what the async save below does — block that so a
+  // failed save doesn't look like a silently-discarded task.
+  e.preventDefault();
+  showFormError('');
+
   const id = document.getElementById('taskId').value;
   const payload = {
     title: document.getElementById('fTitle').value.trim(),
@@ -186,43 +220,78 @@ document.getElementById('taskForm').addEventListener('submit', async (e) => {
     recurrence: document.getElementById('fFreq').value ? { freq: document.getElementById('fFreq').value, interval: 1 } : null,
     links: parseLinks(document.getElementById('fLinks').value),
   };
-  if (!payload.title) return;
-
-  if (id) {
-    await api(`/api/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
-  } else {
-    await api('/api/tasks', { method: 'POST', body: JSON.stringify(payload) });
+  if (!payload.title) {
+    showFormError('Title is required.');
+    return;
   }
-  dialog.close();
-  await loadTasks();
+  if (payload.recurrence && !payload.due_date) {
+    showFormError('A repeating task needs a due date.');
+    return;
+  }
+
+  const saveBtn = document.getElementById('saveBtn');
+  saveBtn.disabled = true;
+  try {
+    if (id) {
+      await api(`/api/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+    } else {
+      await api('/api/tasks', { method: 'POST', body: JSON.stringify(payload) });
+    }
+    dialog.close();
+    await loadTasks();
+  } catch (err) {
+    showFormError(err.message || 'Could not save this task. Try again.');
+  } finally {
+    saveBtn.disabled = false;
+  }
 });
 
 document.getElementById('deleteBtn').addEventListener('click', async () => {
   const id = document.getElementById('taskId').value;
   if (!id) return;
-  await api(`/api/tasks/${id}`, { method: 'DELETE' });
-  dialog.close();
-  await loadTasks();
+  try {
+    await api(`/api/tasks/${id}`, { method: 'DELETE' });
+    dialog.close();
+    await loadTasks();
+  } catch (err) {
+    showFormError(err.message || 'Could not delete this task. Try again.');
+  }
 });
 
 document.querySelectorAll('[data-status]').forEach((btn) => {
   btn.addEventListener('click', () => {
     state.statusFilter = btn.dataset.status;
+    localStorage.setItem('todoStatusFilter', state.statusFilter);
     document.querySelectorAll('[data-status]').forEach((b) => b.classList.toggle('active', b === btn));
     loadTasks();
   });
 });
 
-document.getElementById('keySave').addEventListener('click', () => {
+document.getElementById('keySave').addEventListener('click', async () => {
+  const keyError = document.getElementById('keyError');
   const val = document.getElementById('keyInput').value.trim();
-  if (val) localStorage.setItem('todoApiKey', val);
+  keyError.hidden = true;
+  if (!val) {
+    keyError.textContent = 'Enter an API key.';
+    keyError.hidden = false;
+    return;
+  }
+  // Validate before committing — an unverified key that turns out to be
+  // wrong just reopens the banner with no explanation for why.
+  const res = await fetch('/api/categories', { headers: { 'X-API-Key': val } }).catch(() => null);
+  if (!res || !res.ok) {
+    keyError.textContent = 'That key was rejected by the server.';
+    keyError.hidden = false;
+    return;
+  }
+  localStorage.setItem('todoApiKey', val);
   document.getElementById('keyBanner').hidden = true;
   loadCategories().then(loadTasks);
 });
 
 // --- init -----------------------------------------------------------------
 
-document.querySelector('[data-status="pending"]').classList.add('active');
+document.querySelectorAll('[data-status]').forEach((b) => b.classList.toggle('active', b.dataset.status === state.statusFilter));
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});

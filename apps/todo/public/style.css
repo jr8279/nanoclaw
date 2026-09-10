@@ -1,17 +1,34 @@
 :root {
-  color-scheme: dark light;
-  --bg: #0f1117;
-  --surface: #171a23;
-  --surface-2: #1f2330;
-  --border: #2a2f3d;
-  --text: #e8e9ee;
-  --text-dim: #9096a8;
-  --accent: #6366f1;
-  --danger: #ef4444;
-  --urgent: #ef4444;
-  --high: #f59e0b;
-  --medium: #6366f1;
+  color-scheme: light dark;
+  --bg: #f7f7fb;
+  --surface: #ffffff;
+  --surface-2: #f0f1f6;
+  --border: #dcdfe8;
+  --text: #17181f;
+  --text-dim: #61667a;
+  --accent: #4f46e5;
+  --danger: #dc2626;
+  --urgent: #dc2626;
+  --high: #d97706;
+  --medium: #4f46e5;
   --low: #64748b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #0f1117;
+    --surface: #171a23;
+    --surface-2: #1f2330;
+    --border: #2a2f3d;
+    --text: #e8e9ee;
+    --text-dim: #9096a8;
+    --accent: #6366f1;
+    --danger: #ef4444;
+    --urgent: #ef4444;
+    --high: #f59e0b;
+    --medium: #6366f1;
+    --low: #64748b;
+  }
 }
 
 * { box-sizing: border-box; }
@@ -74,33 +91,69 @@ body {
   display: flex;
   gap: 10px;
   align-items: flex-start;
+  max-width: 100%;
 }
 .task-card.importance-urgent { border-left-color: var(--urgent); }
 .task-card.importance-high { border-left-color: var(--high); }
 .task-card.importance-low { border-left-color: var(--low); }
-.task-card.completed { opacity: 0.55; }
-.task-card.overdue .due { color: var(--danger); }
+.task-card.completed { opacity: 0.6; }
+.task-card.overdue .due { color: var(--danger); font-weight: 600; }
 
+/* Visual dot stays small; the tappable area is a full 44px hit target,
+   per iOS HIG minimum, via padding rather than a bigger visible circle. */
 .task-check {
+  width: 44px;
+  height: 44px;
+  margin: -11px -11px -11px -13px;
+  border: none;
+  background: transparent;
+  flex: 0 0 auto;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.task-check::before {
+  content: '';
   width: 22px;
   height: 22px;
   border-radius: 50%;
   border: 2px solid var(--text-dim);
-  background: transparent;
-  flex: 0 0 auto;
-  cursor: pointer;
-  margin-top: 2px;
+  display: block;
 }
-.task-card.completed .task-check { background: var(--accent); border-color: var(--accent); }
+.task-card.completed .task-check::before { background: var(--accent); border-color: var(--accent); }
 
 .task-body { flex: 1; min-width: 0; cursor: pointer; }
-.task-title { font-weight: 600; word-break: break-word; }
+.task-title { font-weight: 600; word-break: break-word; overflow-wrap: anywhere; }
 .task-card.completed .task-title { text-decoration: line-through; }
 .task-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; font-size: 0.78rem; color: var(--text-dim); }
 .task-meta .cat { padding: 1px 8px; border-radius: 999px; }
-.task-notes { font-size: 0.85rem; color: var(--text-dim); margin-top: 4px; }
-.task-links { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
-.task-links a { color: var(--accent); font-size: 0.8rem; text-decoration: none; }
+.task-meta .badge {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+}
+.task-meta .badge.urgent { color: var(--urgent); border: 1px solid var(--urgent); }
+.task-meta .badge.high { color: var(--high); border: 1px solid var(--high); }
+.task-meta .badge.overdue { color: white; background: var(--danger); }
+.task-notes {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  margin-top: 4px;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.task-links { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; max-width: 100%; }
+.task-links a {
+  color: var(--accent);
+  font-size: 0.8rem;
+  text-decoration: none;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
 .task-links a:hover { text-decoration: underline; }
 
 .empty { color: var(--text-dim); text-align: center; padding: 40px 0; }
@@ -112,6 +165,8 @@ dialog {
   color: var(--text);
   padding: 20px;
   width: min(480px, 92vw);
+  max-height: 85vh;
+  overflow-y: auto;
 }
 dialog::backdrop { background: rgba(0,0,0,0.5); }
 dialog h2 { margin-top: 0; }
@@ -129,7 +184,12 @@ dialog input, dialog select, dialog textarea {
 }
 .row { display: flex; gap: 12px; }
 .row > label { flex: 1; }
-.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.dialog-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 8px; }
+.form-error {
+  color: var(--danger);
+  font-size: 0.85rem;
+  margin: 0 0 4px;
+}
 
 .key-banner {
   position: fixed;
@@ -138,10 +198,14 @@ dialog input, dialog select, dialog textarea {
   right: 0;
   background: var(--surface-2);
   border-top: 1px solid var(--border);
-  padding: 10px 16px;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   align-items: center;
   font-size: 0.85rem;
+  z-index: 10;
 }
-.key-banner input { flex: 1; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text); }
+.key-banner[hidden] { display: none; }
+.key-banner input { flex: 1; min-width: 120px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text); }
+.key-banner .key-error { color: var(--danger); width: 100%; font-size: 0.8rem; margin: 0; }

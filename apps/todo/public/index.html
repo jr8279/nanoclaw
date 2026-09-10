@@ -34,6 +34,7 @@
       <span>This server requires an API key.</span>
       <input id="keyInput" type="password" placeholder="API key" />
       <button id="keySave" class="btn">Save</button>
+      <p id="keyError" class="key-error" hidden></p>
     </div>
   </div>
 
@@ -79,9 +80,11 @@
         </label>
       </div>
 
-      <label>Links (one per line, "label url")
+      <label>Links (one per line, "label https://url" — the URL must start with http:// or https://)
         <textarea id="fLinks" rows="2" placeholder="School portal https://example.com"></textarea>
       </label>
+
+      <p id="formError" class="form-error" hidden></p>
 
       <div class="dialog-actions">
         <button type="button" id="cancelBtn" class="btn">Cancel</button>

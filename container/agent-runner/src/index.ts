@@ -103,7 +103,10 @@ async function main(): Promise<void> {
     mcpServers.todo = {
       command: 'bun',
       args: ['run', path.join(__dirname, 'todo-mcp-stdio.ts')],
-      env: {},
+      env: {
+        TODO_API_URL: process.env.TODO_API_URL,
+        ...(process.env.TODO_API_KEY ? { TODO_API_KEY: process.env.TODO_API_KEY } : {}),
+      },
     };
     log('Todo MCP tool enabled');
   }

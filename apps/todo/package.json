@@ -7,10 +7,14 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "dev": "node --watch src/server.js",
+    "test": "node --test"
   },
   "dependencies": {
     "better-sqlite3": "^11.3.0",
     "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "jsdom": "^30.0.1"
   }
 }

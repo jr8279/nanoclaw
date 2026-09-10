@@ -18,9 +18,27 @@ TODO_PORT=8787 TODO_API_KEY=$(openssl rand -hex 24) npm start
 
 - `TODO_PORT` — defaults to `8787`.
 - `TODO_DATA_DIR` — where `todo.db` lives, defaults to `apps/todo/data/`.
-- `TODO_API_KEY` — if set, every `/api/*` request (PWA and MCP tool alike)
-  must send it via the `X-API-Key` header. Leave unset only on a fully
-  trusted LAN — the PWA has no other login.
+- `TODO_API_KEY` — if set, every `/api/*` request except `/api/health`
+  (PWA and MCP tool alike) must send it via the `X-API-Key` header.
+- `TODO_BIND_ADDR` — which interface to listen on. Defaults to `0.0.0.0`
+  *only if* `TODO_API_KEY` is set; otherwise defaults to `127.0.0.1` so an
+  unauthenticated instance isn't reachable from the rest of the LAN. Set it
+  explicitly to override either default. If you leave `TODO_API_KEY` unset,
+  the server logs a startup warning and only listens on localhost —
+  reachable from a browser on the same KVM, or via SSH port-forwarding, but
+  not directly from your phone. For phone access, set `TODO_API_KEY` (this
+  also flips the bind default to `0.0.0.0`).
+
+### Run the test suite
+
+```bash
+cd apps/todo
+npm test
+```
+
+Covers the REST API (validation, recurrence math, cascading deletes, auth)
+and the PWA's client-side logic (link parsing, the save-failure UI path,
+CSS structural checks) — see `test/app.test.js` and `test/frontend.test.js`.
 
 ### Run as a systemd service
 
@@ -116,5 +134,31 @@ All endpoints are under `/api`. JSON in, JSON out.
 
 `recurrence.freq` is one of `daily`, `weekly`, `monthly`, `yearly`;
 `interval` is an optional repeat count (e.g. `{freq: "weekly", interval: 2}`
-= every two weeks). On completion, the next instance's due date is computed
-from the completed task's own due date, not from "now".
+= every two weeks). Setting a recurrence requires a `due_date` — recurrence
+is anchored on it (on completion, the next instance's due date is computed
+from the completed task's own due date, not from "now"), so there's nothing
+to anchor to without one. Monthly/yearly recurrence clamps to the last real
+day of the target month (Jan 31 + 1 month lands on Feb 28, not an overflow
+into March).
+
+Validation: `title` is required; `importance` must be
+`low`/`medium`/`high`/`urgent`; `due_date` must parse as a valid timestamp;
+`category_id` must reference an existing category; link URLs must start
+with `http://`, `https://`, or `mailto:` (rejected otherwise — this closes
+off `javascript:`/`data:` URIs, which would otherwise execute on click).
+Requests that fail validation get a `400` with a JSON `{ error }` body, not
+a stack trace — every route funnels through a single JSON error handler.
+
+### Known low-risk items (personal LAN app, not multi-tenant)
+
+- The `X-API-Key` check isn't timing-attack-hardened against a
+  sophisticated LAN adversary in the classic sense, but does use
+  `crypto.timingSafeEqual` rather than `===`.
+- `TODO_API_KEY` is forwarded to the agent container as a plain env var
+  (not via OneCLI's credential vault) — a deliberate exception, since it's
+  a key you generate yourself purely to gate this app, not a third-party
+  credential OneCLI's revocation/sharing model is meant to protect.
+- `express`'s transitive `qs` dependency has an open moderate-severity
+  advisory (query-string parsing DoS) with no non-breaking fix available at
+  time of writing. Low relevance for a single-operator LAN app; revisit if
+  `npm audit` clears with a future `express` release.
