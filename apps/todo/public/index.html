@@ -4,34 +4,43 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>NanoClaw Todo</title>
-  <meta name="theme-color" content="#4f46e5" />
+  <meta name="theme-color" content="#21252B" />
   <link rel="manifest" href="/manifest.json" />
   <link rel="apple-touch-icon" href="/icons/icon-192.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Todo" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,500;0,600;1,500&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+    rel="stylesheet"
+  />
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
   <div id="app">
     <header class="topbar">
-      <h1>Todo</h1>
-      <button id="addBtn" class="btn primary">+ New</button>
+      <div class="topbar-heading">
+        <h1>Todo</h1>
+        <span class="today" id="todayLabel"></span>
+      </div>
+      <button id="addBtn" class="btn primary">Add task</button>
     </header>
 
     <nav class="filters">
-      <div class="chip-row" id="categoryChips"></div>
-      <div class="chip-row">
-        <button class="chip" data-status="pending">Open</button>
-        <button class="chip" data-status="completed">Done</button>
-        <button class="chip" data-status="all">All</button>
+      <div class="tab-row" id="categoryChips"></div>
+      <div class="status-row">
+        <button class="status-tab" data-status="pending">Open</button>
+        <button class="status-tab" data-status="completed">Done</button>
+        <button class="status-tab" data-status="all">All</button>
       </div>
     </nav>
 
     <main id="taskList" class="task-list"></main>
 
     <div id="keyBanner" class="key-banner" hidden>
-      <span>This server requires an API key.</span>
+      <span>This server requires a key to make changes.</span>
       <input id="keyInput" type="password" placeholder="API key" />
       <button id="keySave" class="btn">Save</button>
       <p id="keyError" class="key-error" hidden></p>
@@ -80,7 +89,7 @@
         </label>
       </div>
 
-      <label>Links (one per line, "label https://url" — the URL must start with http:// or https://)
+      <label>Links (one per line, "label https://url")
         <textarea id="fLinks" rows="2" placeholder="School portal https://example.com"></textarea>
       </label>
 

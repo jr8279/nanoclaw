@@ -52,15 +52,15 @@ async function loadCategories() {
 
 function renderCategoryChips() {
   const row = document.getElementById('categoryChips');
-  const all = `<button class="chip ${state.categoryFilter === null ? 'active' : ''}" data-cat="">All</button>`;
-  const chips = state.categories
+  const all = `<button class="tab ${state.categoryFilter === null ? 'active' : ''}" data-cat="">All</button>`;
+  const tabs = state.categories
     .map(
       (c) =>
-        `<button class="chip ${state.categoryFilter === c.id ? 'active' : ''}" data-cat="${c.id}" style="border-color:${c.color}">${escapeHtml(c.name)}</button>`,
+        `<button class="tab ${state.categoryFilter === c.id ? 'active' : ''}" data-cat="${c.id}">${escapeHtml(c.name)}</button>`,
     )
     .join('');
-  row.innerHTML = all + chips;
-  row.querySelectorAll('.chip').forEach((btn) => {
+  row.innerHTML = all + tabs;
+  row.querySelectorAll('.tab').forEach((btn) => {
     btn.addEventListener('click', () => {
       state.categoryFilter = btn.dataset.cat ? Number(btn.dataset.cat) : null;
       localStorage.setItem('todoCategoryFilter', state.categoryFilter ?? '');
@@ -88,38 +88,40 @@ function renderTasks() {
     .map((task) => {
       const cat = categoryById(task.category_id);
       const overdue = isOverdue(task);
-      const classes = [
-        'task-card',
-        `importance-${task.importance}`,
-        task.status === 'completed' ? 'completed' : '',
-        overdue ? 'overdue' : '',
-      ]
-        .filter(Boolean)
-        .join(' ');
+      const classes = ['task-row', task.status === 'completed' ? 'completed' : ''].filter(Boolean).join(' ');
       const due = fmtDue(task.due_date);
       const links = task.links
         .map((l) => `<a href="${escapeAttr(l.url)}" target="_blank" rel="noopener">${escapeHtml(l.label || l.url)}</a>`)
         .join('');
-      // Color alone isn't enough to signal importance/overdue (colorblind users,
-      // quick scanning) — back it with a text badge too.
-      const importanceBadge =
+      // Importance/overdue are signaled by both color and a plain-language
+      // word (not color alone) so they still read for colorblind users and
+      // at a glance.
+      const importanceFlag =
         task.importance === 'urgent'
-          ? '<span class="badge urgent">Urgent</span>'
+          ? '<span class="flag urgent">Urgent</span>'
           : task.importance === 'high'
-            ? '<span class="badge high">High</span>'
+            ? '<span class="flag high">High</span>'
             : '';
-      const overdueBadge = overdue ? '<span class="badge overdue">Overdue</span>' : '';
+      const overdueFlag = overdue ? '<span class="flag urgent">Overdue</span>' : '';
+      // The "Overdue" flag already carries the urgency signal, so the due
+      // date itself stays plain rather than doubling up the red accent.
+      const dueMeta = due ? `<span class="due">Due ${due}</span>` : '';
+      const recurMeta = due && task.recurrence ? '<span class="recur">Repeats</span>' : '';
       const checkLabel = task.status === 'completed' ? 'Mark incomplete' : 'Mark complete';
       return `
         <div class="${classes}" data-id="${task.id}">
-          <button class="task-check" data-toggle="${task.id}" aria-label="${checkLabel}" aria-pressed="${task.status === 'completed'}"></button>
+          ${cat ? `<span class="tab-swatch" style="background:${cat.color}"></span>` : ''}
+          <button class="check" data-toggle="${task.id}" aria-label="${checkLabel}" aria-pressed="${task.status === 'completed'}">
+            <span class="check-box"><svg viewBox="0 0 13 13"><path d="M2 6.5l3 3.2 6-7" /></svg></span>
+          </button>
           <div class="task-body" data-edit="${task.id}">
             <div class="task-title">${escapeHtml(task.title)}</div>
             <div class="task-meta">
-              ${importanceBadge}
-              ${overdueBadge}
-              ${cat ? `<span class="cat" style="background:${cat.color}22;color:${cat.color}">${escapeHtml(cat.name)}</span>` : ''}
-              ${due ? `<span class="due">${task.recurrence ? '↻ ' : ''}Due ${due}</span>` : task.recurrence ? '<span>↻ recurring</span>' : ''}
+              ${importanceFlag}
+              ${overdueFlag}
+              ${dueMeta}
+              ${recurMeta}
+              ${cat ? `<span class="category-name">${escapeHtml(cat.name)}</span>` : ''}
             </div>
             ${task.notes ? `<div class="task-notes">${escapeHtml(task.notes)}</div>` : ''}
             ${links ? `<div class="task-links">${links}</div>` : ''}
@@ -133,6 +135,11 @@ function renderTasks() {
       e.stopPropagation();
       const id = btn.dataset.toggle;
       const task = state.tasks.find((t) => t.id === Number(id));
+      const completing = task.status !== 'completed';
+      // The one deliberate motion in this design: the check draws itself in
+      // rather than just appearing, so it's visible during the (usually
+      // brief) round trip instead of only after the list re-renders.
+      if (completing) btn.classList.add('drawing');
       await api(`/api/tasks/${id}/${task.status === 'completed' ? 'reopen' : 'complete'}`, { method: 'POST' });
       await loadTasks();
     });
@@ -290,6 +297,12 @@ document.getElementById('keySave').addEventListener('click', async () => {
 });
 
 // --- init -----------------------------------------------------------------
+
+document.getElementById('todayLabel').textContent = new Date().toLocaleDateString(undefined, {
+  weekday: 'long',
+  month: 'long',
+  day: 'numeric',
+});
 
 document.querySelectorAll('[data-status]').forEach((b) => b.classList.toggle('active', b.dataset.status === state.statusFilter));
 
