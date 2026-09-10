@@ -28,11 +28,6 @@ describe('todoEnvArgs', () => {
   it('forwards both when set', () => {
     process.env.TODO_API_URL = 'http://host.docker.internal:8787';
     process.env.TODO_API_KEY = 'secret';
-    expect(todoEnvArgs()).toEqual([
-      '-e',
-      'TODO_API_URL=http://host.docker.internal:8787',
-      '-e',
-      'TODO_API_KEY=secret',
-    ]);
+    expect(todoEnvArgs()).toEqual(['-e', 'TODO_API_URL=http://host.docker.internal:8787', '-e', 'TODO_API_KEY=secret']);
   });
 });
