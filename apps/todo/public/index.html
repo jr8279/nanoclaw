@@ -47,13 +47,34 @@
     <nav class="filters">
       <div class="tab-row" id="categoryChips"></div>
       <div class="status-row">
-        <button class="status-tab" data-status="pending">Open</button>
-        <button class="status-tab" data-status="completed">Done</button>
-        <button class="status-tab" data-status="all">All</button>
+        <div class="status-tabs">
+          <button class="status-tab" data-status="pending">Open</button>
+          <button class="status-tab" data-status="completed">Done</button>
+          <button class="status-tab" data-status="all">All</button>
+        </div>
+        <div class="list-controls">
+          <div class="control-select">
+            <span class="control-label">Sort</span>
+            <select id="sortSelect" aria-label="Sort tasks">
+              <option value="due">Due date</option>
+              <option value="priority">Priority</option>
+              <option value="title">Title (A–Z)</option>
+              <option value="created">Recently added</option>
+            </select>
+          </div>
+          <div class="control-select" id="groupControl">
+            <span class="control-label">Group</span>
+            <select id="groupSelect" aria-label="Group tasks">
+              <option value="none">None</option>
+              <option value="category">Category</option>
+              <option value="priority">Priority</option>
+            </select>
+          </div>
+        </div>
       </div>
     </nav>
 
-    <main id="taskList" class="task-list"></main>
+    <main id="taskList"></main>
 
     <button id="addBtn" class="fab" aria-label="Add task">
       <svg viewBox="0 0 24 24" width="24" height="24"><path d="M12 5v14M5 12h14" /></svg>

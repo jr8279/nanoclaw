@@ -7,8 +7,13 @@ const state = {
   categoryFilter: localStorage.getItem('todoCategoryFilter')
     ? Number(localStorage.getItem('todoCategoryFilter'))
     : null,
+  sortBy: localStorage.getItem('todoSortBy') || 'due',
+  groupBy: localStorage.getItem('todoGroupBy') || 'none',
   selectedAssigneeIds: new Set(),
 };
+
+const IMPORTANCE_RANK = { urgent: 0, high: 1, medium: 2, low: 3 };
+const IMPORTANCE_LABEL = { urgent: 'Urgent', high: 'High', medium: 'Medium', low: 'Low' };
 
 async function api(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
@@ -78,10 +83,71 @@ function renderCategoryChips() {
     btn.addEventListener('click', () => {
       state.categoryFilter = btn.dataset.cat ? Number(btn.dataset.cat) : null;
       localStorage.setItem('todoCategoryFilter', state.categoryFilter ?? '');
+      // "Group by category" only makes sense across categories — a single
+      // category view falls back to no grouping (or stays on priority).
+      if (state.categoryFilter !== null && state.groupBy === 'category') {
+        state.groupBy = 'none';
+        localStorage.setItem('todoGroupBy', state.groupBy);
+      }
       renderCategoryChips();
+      renderListControls();
       loadTasks();
     });
   });
+}
+
+// --- sort + group -------------------------------------------------------
+
+function sortTasks(tasks, sortBy) {
+  const arr = [...tasks];
+  const byDue = (a, b) => {
+    if (!a.due_date && !b.due_date) return 0;
+    if (!a.due_date) return 1;
+    if (!b.due_date) return -1;
+    return new Date(a.due_date) - new Date(b.due_date);
+  };
+  if (sortBy === 'priority') {
+    arr.sort((a, b) => IMPORTANCE_RANK[a.importance] - IMPORTANCE_RANK[b.importance] || byDue(a, b));
+  } else if (sortBy === 'title') {
+    arr.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
+  } else if (sortBy === 'created') {
+    arr.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  } else {
+    arr.sort(byDue);
+  }
+  return arr;
+}
+
+function groupTasks(tasks, groupBy) {
+  if (groupBy === 'priority') {
+    const order = ['urgent', 'high', 'medium', 'low'];
+    return order
+      .map((key) => ({ key, label: IMPORTANCE_LABEL[key], dot: null, tasks: tasks.filter((t) => t.importance === key) }))
+      .filter((g) => g.tasks.length);
+  }
+  if (groupBy === 'category') {
+    const groups = state.categories.map((c) => ({
+      key: String(c.id),
+      label: c.name,
+      dot: c.color,
+      tasks: tasks.filter((t) => t.category_id === c.id),
+    }));
+    const uncategorized = tasks.filter((t) => t.category_id == null);
+    if (uncategorized.length) groups.push({ key: 'none', label: 'No category', dot: null, tasks: uncategorized });
+    return groups.filter((g) => g.tasks.length);
+  }
+  return null;
+}
+
+function renderListControls() {
+  const groupSelect = document.getElementById('groupSelect');
+  const inSingleCategory = state.categoryFilter !== null;
+  groupSelect.innerHTML =
+    '<option value="none">None</option>' +
+    (inSingleCategory ? '' : '<option value="category">Category</option>') +
+    '<option value="priority">Priority</option>';
+  document.getElementById('sortSelect').value = state.sortBy;
+  groupSelect.value = state.groupBy;
 }
 
 async function loadTasks() {
@@ -98,9 +164,45 @@ function renderTasks() {
     list.innerHTML = '<div class="empty">Nothing here. Add a task to get started.</div>';
     return;
   }
-  list.innerHTML = state.tasks
-    .map((task) => {
-      const cat = categoryById(task.category_id);
+
+  const sorted = sortTasks(state.tasks, state.sortBy);
+  const groups = groupTasks(sorted, state.groupBy);
+
+  if (groups) {
+    list.innerHTML = groups
+      .map(
+        (g) => `
+        <div class="task-group">
+          <div class="task-group-heading">${g.dot ? `<span class="dot" style="--dot:${g.dot}"></span>` : ''}${escapeHtml(g.label)}</div>
+          <div class="task-list">${g.tasks.map(taskRowHtml).join('')}</div>
+        </div>`,
+      )
+      .join('');
+  } else {
+    list.innerHTML = `<div class="task-list">${sorted.map(taskRowHtml).join('')}</div>`;
+  }
+
+  list.querySelectorAll('[data-toggle]').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.toggle;
+      const task = state.tasks.find((t) => t.id === Number(id));
+      const completing = task.status !== 'completed';
+      // The one deliberate motion in this design: the check draws itself in
+      // rather than just appearing, so it's visible during the (usually
+      // brief) round trip instead of only after the list re-renders.
+      if (completing) btn.classList.add('drawing');
+      await api(`/api/tasks/${id}/${task.status === 'completed' ? 'reopen' : 'complete'}`, { method: 'POST' });
+      await loadTasks();
+    });
+  });
+  list.querySelectorAll('[data-edit]').forEach((el) => {
+    el.addEventListener('click', () => openDialog(Number(el.dataset.edit)));
+  });
+}
+
+function taskRowHtml(task) {
+  const cat = categoryById(task.category_id);
       const overdue = isOverdue(task);
       const classes = ['task-row', task.status === 'completed' ? 'completed' : ''].filter(Boolean).join(' ');
       const due = fmtDue(task.due_date);
@@ -154,26 +256,6 @@ function renderTasks() {
             ${links ? `<div class="task-links">${links}</div>` : ''}
           </div>
         </div>`;
-    })
-    .join('');
-
-  list.querySelectorAll('[data-toggle]').forEach((btn) => {
-    btn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      const id = btn.dataset.toggle;
-      const task = state.tasks.find((t) => t.id === Number(id));
-      const completing = task.status !== 'completed';
-      // The one deliberate motion in this design: the check draws itself in
-      // rather than just appearing, so it's visible during the (usually
-      // brief) round trip instead of only after the list re-renders.
-      if (completing) btn.classList.add('drawing');
-      await api(`/api/tasks/${id}/${task.status === 'completed' ? 'reopen' : 'complete'}`, { method: 'POST' });
-      await loadTasks();
-    });
-  });
-  list.querySelectorAll('[data-edit]').forEach((el) => {
-    el.addEventListener('click', () => openDialog(Number(el.dataset.edit)));
-  });
 }
 
 // --- assignee picker (task dialog) -----------------------------------------
@@ -328,6 +410,17 @@ document.querySelectorAll('[data-status]').forEach((btn) => {
     document.querySelectorAll('[data-status]').forEach((b) => b.classList.toggle('active', b === btn));
     loadTasks();
   });
+});
+
+document.getElementById('sortSelect').addEventListener('change', (e) => {
+  state.sortBy = e.target.value;
+  localStorage.setItem('todoSortBy', state.sortBy);
+  renderTasks();
+});
+document.getElementById('groupSelect').addEventListener('change', (e) => {
+  state.groupBy = e.target.value;
+  localStorage.setItem('todoGroupBy', state.groupBy);
+  renderTasks();
 });
 
 // --- user menu + invites ------------------------------------------------
@@ -526,6 +619,7 @@ async function boot() {
   document
     .querySelectorAll('[data-status]')
     .forEach((b) => b.classList.toggle('active', b.dataset.status === state.statusFilter));
+  renderListControls();
 
   await loadUsers();
   await loadCategories();

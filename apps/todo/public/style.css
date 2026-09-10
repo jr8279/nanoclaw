@@ -251,7 +251,16 @@ body::before {
   font-weight: 600;
 }
 .category-filter:active { transform: scale(0.95); }
-.status-row { display: flex; gap: 16px; border-bottom: 1px solid var(--rule); padding-bottom: 8px; }
+.status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 8px;
+}
+.status-tabs { display: flex; gap: 16px; }
 .status-tab {
   border: none;
   background: none;
@@ -277,6 +286,60 @@ body::before {
   to { transform: scaleX(1); }
 }
 
+/* --- sort/group controls: quiet, native selects, not another pill row -- */
+
+.list-controls { display: flex; gap: 14px; }
+.control-select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.control-label { font-size: 0.78rem; color: var(--ink-faint); }
+.control-select select {
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  padding: 2px 14px 2px 0;
+  margin: 0;
+  cursor: pointer;
+}
+.control-select select:focus { color: var(--ink); outline: none; }
+.control-select::after {
+  content: '';
+  position: absolute;
+  right: 1px;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  border-right: 1.5px solid var(--ink-faint);
+  border-bottom: 1.5px solid var(--ink-faint);
+  transform: translateY(-65%) rotate(45deg);
+  pointer-events: none;
+}
+
+/* --- grouped sections: a heading above its own card, repeated per group - */
+
+.task-group { margin-bottom: 20px; }
+.task-group:last-child { margin-bottom: 0; }
+.task-group-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin: 0 2px 8px;
+}
+.task-group-heading .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--dot, var(--ink-faint)); flex: 0 0 auto; }
+
 /* --- task list: a grouped surface, not a full-bleed content list --------
    Rows ruled by hairlines *inside a bounded card* (the native "grouped
    table" idiom — iOS Settings/Reminders) rather than running edge-to-edge
@@ -284,6 +347,8 @@ body::before {
    list) rather than app chrome. The card is --surface, distinct from the
    --canvas page background, so it visibly sits on top rather than being
    part of the page. */
+#taskList { padding-bottom: 76px; }
+
 .task-list {
   display: flex;
   flex-direction: column;
@@ -291,7 +356,6 @@ body::before {
   border: 1px solid var(--rule);
   border-radius: 14px;
   overflow: hidden;
-  margin-bottom: 76px;
 }
 
 .task-row {
