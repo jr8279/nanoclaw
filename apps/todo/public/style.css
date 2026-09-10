@@ -214,19 +214,20 @@ body::before {
    tab" version read as literal plastic index tabs rather than an app
    control. Color still carries the category identity (the dot), it just
    isn't spent on a skeuomorphic container anymore. */
-.tab-row { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-bottom: 10px; }
+.tab-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
 .category-filter {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: none;
-  background: none;
-  color: var(--ink-faint);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--paper-2);
+  color: var(--ink-soft);
   font-family: inherit;
-  font-size: 0.82rem;
-  padding: 2px 0;
+  font-size: 0.8rem;
+  padding: 5px 12px 5px 10px;
   cursor: pointer;
-  transition: color 0.12s ease, transform 0.1s ease;
+  transition: color 0.12s ease, transform 0.1s ease, background 0.12s ease, border-color 0.12s ease;
 }
 .category-filter .dot {
   width: 7px;
@@ -235,8 +236,15 @@ body::before {
   background: var(--dot, var(--ink-faint));
   flex: 0 0 auto;
 }
-.category-filter.active { color: var(--ink); font-weight: 600; }
-.category-filter:active { transform: scale(0.94); }
+/* Active state tints with the category's own color rather than a uniform
+   accent — "All" (no --dot set) falls back to ink, matching the status row. */
+.category-filter.active {
+  color: var(--dot, var(--ink));
+  border-color: var(--dot, var(--ink));
+  background: color-mix(in srgb, var(--dot, var(--ink)) 14%, var(--paper));
+  font-weight: 600;
+}
+.category-filter:active { transform: scale(0.95); }
 .status-row { display: flex; gap: 16px; border-bottom: 1px solid var(--rule); padding-bottom: 8px; }
 .status-tab {
   border: none;
