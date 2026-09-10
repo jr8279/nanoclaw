@@ -9,14 +9,18 @@
 
 :root {
   color-scheme: light dark;
-  --canvas: #E2DFD2;
-  --surface: #F8F7F2;
-  --paper: #EDEDE6;
-  --paper-2: #E4E3D9;
-  --rule: #D8D6C9;
-  --ink: #21252B;
-  --ink-soft: #5B5F57;
-  --ink-faint: #64675A;
+  /* Cool neutral gray, not tan/khaki — the old warm-paper canvas fought
+     the indigo accent instead of pairing with it. Surface is a real jump
+     to near-white so cards read as clearly lifted, not just "the lighter
+     shade of the same beige." */
+  --canvas: #E4E4E9;
+  --surface: #FFFFFF;
+  --paper: #EDEDF1;
+  --paper-2: #E6E6EC;
+  --rule: #D7D7E1;
+  --ink: #1B1D24;
+  --ink-soft: #52545F;
+  --ink-faint: #8A8C99;
   --accent: #4F46E5;
   --accent-ink: #FFFFFF;
   --accent-soft: color-mix(in srgb, var(--accent) 14%, var(--surface));
@@ -29,22 +33,26 @@
      shadow (contact + ambient), floating chrome (menus, FAB, dialog) goes
      further. Tuned separately for dark mode below since black shadows
      read as mud on a dark ground. */
-  --shadow-card: 0 1px 2px rgba(33, 27, 15, 0.05), 0 4px 12px rgba(33, 27, 15, 0.07);
-  --shadow-float: 0 6px 20px rgba(33, 27, 15, 0.14), 0 2px 6px rgba(33, 27, 15, 0.10);
-  --shadow-fab: 0 8px 22px rgba(79, 70, 229, 0.35), 0 3px 8px rgba(33, 27, 15, 0.16);
-  --shadow-dialog: 0 24px 60px rgba(33, 27, 15, 0.24), 0 8px 20px rgba(33, 27, 15, 0.14);
+  --shadow-card: 0 1px 2px rgba(20, 20, 30, 0.06), 0 4px 14px rgba(20, 20, 30, 0.08);
+  --shadow-float: 0 6px 20px rgba(20, 20, 30, 0.16), 0 2px 6px rgba(20, 20, 30, 0.10);
+  --shadow-fab: 0 8px 22px rgba(79, 70, 229, 0.35), 0 3px 8px rgba(20, 20, 30, 0.16);
+  --shadow-dialog: 0 24px 60px rgba(20, 20, 30, 0.26), 0 8px 20px rgba(20, 20, 30, 0.15);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --canvas: #151612;
-    --surface: #1F211C;
-    --paper: #1B1C17;
-    --paper-2: #24261F;
-    --rule: #35372C;
-    --ink: #EDECE3;
-    --ink-soft: #A9AA9C;
-    --ink-faint: #8C8E80;
+    /* Cool near-black, not the previous olive-tinted dark — and surface
+       is pushed noticeably lighter than canvas (not just +2 steps) so
+       cards separate from the page the same way they do in light mode,
+       since black shadows alone can't carry that job on a dark ground. */
+    --canvas: #101114;
+    --surface: #21232C;
+    --paper: #17181F;
+    --paper-2: #24262F;
+    --rule: #3A3C47;
+    --ink: #EEEEF3;
+    --ink-soft: #A7A9B5;
+    --ink-faint: #7C7E8A;
     --accent: #8B85F5;
     --accent-ink: #14121F;
     --accent-soft: color-mix(in srgb, var(--accent) 18%, var(--surface));
@@ -53,22 +61,22 @@
     --ochre: #D9A24E;
     --focus: #8B85F5;
 
-    --shadow-card: 0 1px 0 rgba(0, 0, 0, 0.4), 0 6px 16px rgba(0, 0, 0, 0.35);
-    --shadow-float: 0 10px 28px rgba(0, 0, 0, 0.5), 0 3px 8px rgba(0, 0, 0, 0.4);
-    --shadow-fab: 0 10px 26px rgba(139, 133, 245, 0.32), 0 3px 10px rgba(0, 0, 0, 0.5);
-    --shadow-dialog: 0 30px 70px rgba(0, 0, 0, 0.6), 0 10px 24px rgba(0, 0, 0, 0.45);
+    --shadow-card: 0 1px 0 rgba(0, 0, 0, 0.5), 0 8px 20px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    --shadow-float: 0 12px 32px rgba(0, 0, 0, 0.55), 0 4px 10px rgba(0, 0, 0, 0.4);
+    --shadow-fab: 0 10px 26px rgba(139, 133, 245, 0.4), 0 3px 10px rgba(0, 0, 0, 0.55);
+    --shadow-dialog: 0 32px 80px rgba(0, 0, 0, 0.65), 0 10px 26px rgba(0, 0, 0, 0.5);
   }
 }
 
 :root[data-theme='dark'] {
-  --canvas: #151612;
-  --surface: #1F211C;
-  --paper: #1B1C17;
-  --paper-2: #24261F;
-  --rule: #35372C;
-  --ink: #EDECE3;
-  --ink-soft: #A9AA9C;
-  --ink-faint: #8C8E80;
+  --canvas: #101114;
+  --surface: #21232C;
+  --paper: #17181F;
+  --paper-2: #24262F;
+  --rule: #3A3C47;
+  --ink: #EEEEF3;
+  --ink-soft: #A7A9B5;
+  --ink-faint: #7C7E8A;
   --accent: #8B85F5;
   --accent-ink: #14121F;
   --accent-soft: color-mix(in srgb, var(--accent) 18%, var(--surface));
@@ -77,10 +85,10 @@
   --ochre: #D9A24E;
   --focus: #8B85F5;
 
-  --shadow-card: 0 1px 0 rgba(0, 0, 0, 0.4), 0 6px 16px rgba(0, 0, 0, 0.35);
-  --shadow-float: 0 10px 28px rgba(0, 0, 0, 0.5), 0 3px 8px rgba(0, 0, 0, 0.4);
-  --shadow-fab: 0 10px 26px rgba(139, 133, 245, 0.32), 0 3px 10px rgba(0, 0, 0, 0.5);
-  --shadow-dialog: 0 30px 70px rgba(0, 0, 0, 0.6), 0 10px 24px rgba(0, 0, 0, 0.45);
+  --shadow-card: 0 1px 0 rgba(0, 0, 0, 0.5), 0 8px 20px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --shadow-float: 0 12px 32px rgba(0, 0, 0, 0.55), 0 4px 10px rgba(0, 0, 0, 0.4);
+  --shadow-fab: 0 10px 26px rgba(139, 133, 245, 0.4), 0 3px 10px rgba(0, 0, 0, 0.55);
+  --shadow-dialog: 0 32px 80px rgba(0, 0, 0, 0.65), 0 10px 26px rgba(0, 0, 0, 0.5);
 }
 
 * { box-sizing: border-box; }
