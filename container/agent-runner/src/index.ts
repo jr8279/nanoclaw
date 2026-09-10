@@ -97,6 +97,17 @@ async function main(): Promise<void> {
     log(`Additional MCP server: ${name} (${serverConfig.command})`);
   }
 
+  // Todo MCP tool — opt-in via TODO_API_URL (forwarded from host env in
+  // container-runner.ts only when the host has the todo app configured).
+  if (process.env.TODO_API_URL) {
+    mcpServers.todo = {
+      command: 'bun',
+      args: ['run', path.join(__dirname, 'todo-mcp-stdio.ts')],
+      env: {},
+    };
+    log('Todo MCP tool enabled');
+  }
+
   const provider = createProvider(providerName, {
     assistantName: config.assistantName || undefined,
     mcpServers,

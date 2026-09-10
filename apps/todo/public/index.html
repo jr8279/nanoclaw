@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>NanoClaw Todo</title>
+  <meta name="theme-color" content="#4f46e5" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Todo" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <h1>Todo</h1>
+      <button id="addBtn" class="btn primary">+ New</button>
+    </header>
+
+    <nav class="filters">
+      <div class="chip-row" id="categoryChips"></div>
+      <div class="chip-row">
+        <button class="chip" data-status="pending">Open</button>
+        <button class="chip" data-status="completed">Done</button>
+        <button class="chip" data-status="all">All</button>
+      </div>
+    </nav>
+
+    <main id="taskList" class="task-list"></main>
+
+    <div id="keyBanner" class="key-banner" hidden>
+      <span>This server requires an API key.</span>
+      <input id="keyInput" type="password" placeholder="API key" />
+      <button id="keySave" class="btn">Save</button>
+    </div>
+  </div>
+
+  <dialog id="taskDialog">
+    <form id="taskForm" method="dialog">
+      <h2 id="dialogTitle">New task</h2>
+      <input type="hidden" id="taskId" />
+
+      <label>Title
+        <input id="fTitle" required maxlength="200" />
+      </label>
+
+      <label>Notes
+        <textarea id="fNotes" rows="3"></textarea>
+      </label>
+
+      <div class="row">
+        <label>Category
+          <select id="fCategory"></select>
+        </label>
+        <label>Importance
+          <select id="fImportance">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+            <option value="urgent">Urgent</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="row">
+        <label>Due date
+          <input id="fDue" type="datetime-local" />
+        </label>
+        <label>Repeats
+          <select id="fFreq">
+            <option value="">Never</option>
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+            <option value="yearly">Yearly</option>
+          </select>
+        </label>
+      </div>
+
+      <label>Links (one per line, "label url")
+        <textarea id="fLinks" rows="2" placeholder="School portal https://example.com"></textarea>
+      </label>
+
+      <div class="dialog-actions">
+        <button type="button" id="cancelBtn" class="btn">Cancel</button>
+        <button type="button" id="deleteBtn" class="btn danger" hidden>Delete</button>
+        <button type="submit" id="saveBtn" class="btn primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="/app.js"></script>
+</body>
+</html>
