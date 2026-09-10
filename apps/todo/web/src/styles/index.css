@@ -99,7 +99,14 @@ body {
   margin: 0;
   background: var(--canvas);
   color: var(--ink);
-  font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  /* The real OS font, not a webfont standing in for it — IBM Plex Sans was
+     listed first here, so -apple-system never actually fired even on a
+     Mac/iPhone. That meant this PWA quietly used a different typeface than
+     every other app and the OS chrome around it, which is a small but
+     constant "this isn't native" signal. Letting the system stack render
+     for real (SF Pro on Apple, Segoe UI on Windows, Roboto on Android)
+     fixes that. */
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-size: 15px;
   line-height: 1.45;
   padding-bottom: env(safe-area-inset-bottom);
