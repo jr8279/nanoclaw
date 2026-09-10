@@ -1,8 +1,9 @@
 // Minimal WebAuthn browser glue — just the base64url<->ArrayBuffer plumbing
-// a passkey ceremony needs, hand-written rather than pulling in
-// @simplewebauthn/browser as a CDN dependency for ~40 lines of conversion.
+// a passkey ceremony needs, ported unchanged from the vanilla app's
+// webauthn.js (hand-written rather than pulling in @simplewebauthn/browser
+// as a dependency for ~40 lines of conversion).
 
-function base64urlToBuffer(base64url) {
+export function base64urlToBuffer(base64url) {
   const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
   const pad = (4 - (base64.length % 4)) % 4;
   const binary = atob(base64 + '='.repeat(pad));
@@ -11,7 +12,7 @@ function base64urlToBuffer(base64url) {
   return bytes.buffer;
 }
 
-function bufferToBase64url(buffer) {
+export function bufferToBase64url(buffer) {
   const bytes = new Uint8Array(buffer);
   let binary = '';
   for (const b of bytes) binary += String.fromCharCode(b);
@@ -19,7 +20,7 @@ function bufferToBase64url(buffer) {
 }
 
 /** Create a new passkey from server-provided registration options (JSON, base64url-encoded). */
-async function createPasskey(optionsJSON) {
+export async function createPasskey(optionsJSON) {
   const publicKey = {
     ...optionsJSON,
     challenge: base64urlToBuffer(optionsJSON.challenge),
@@ -45,7 +46,7 @@ async function createPasskey(optionsJSON) {
 }
 
 /** Use an existing passkey to sign a server-provided authentication challenge. */
-async function getPasskey(optionsJSON) {
+export async function getPasskey(optionsJSON) {
   const publicKey = {
     ...optionsJSON,
     challenge: base64urlToBuffer(optionsJSON.challenge),

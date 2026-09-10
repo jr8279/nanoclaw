@@ -4,3 +4,5 @@ test
 .git
 *.md
 npm-debug.log
+# Build artifact — the build stage produces this from web/ itself.
+public

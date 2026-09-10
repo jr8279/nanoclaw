@@ -1,8 +1,10 @@
 /*
-  Design brief: a household planner page, not a SaaS dashboard. One user
-  triaging chores/work/school-admin tasks from a phone. The informing
-  metaphor is a paper planner with index-tab categories, not a card grid —
-  see design-plan.md for the full brief this was built against.
+  Design brief: a household planner, not a SaaS dashboard — still the
+  paper-planner metaphor the vanilla version established (grouped card
+  list, category dots not tabs, serif wordmark only), pushed bolder:
+  a confident saturated signature accent spent only on primary actions
+  and the FAB, and real layered elevation differentiating canvas → surface
+  → floating chrome instead of just 1px hairlines.
 */
 
 :root {
@@ -14,52 +16,76 @@
   --rule: #D8D6C9;
   --ink: #21252B;
   --ink-soft: #5B5F57;
-  --ink-faint: #8A8D80;
-  --accent: #2E4C6D;
+  --ink-faint: #64675A;
+  --accent: #4F46E5;
+  --accent-ink: #FFFFFF;
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, var(--surface));
   --rust: #A6402E;
   --moss: #4B6B4B;
-  --denim: #2E4C6D;
-  --ochre: #B4791F;
-  --focus: #2E4C6D;
+  --ochre: #8F5D14;
+  --focus: #4F46E5;
+
+  /* Layered elevation — canvas has none, surface cards get a soft two-part
+     shadow (contact + ambient), floating chrome (menus, FAB, dialog) goes
+     further. Tuned separately for dark mode below since black shadows
+     read as mud on a dark ground. */
+  --shadow-card: 0 1px 2px rgba(33, 27, 15, 0.05), 0 4px 12px rgba(33, 27, 15, 0.07);
+  --shadow-float: 0 6px 20px rgba(33, 27, 15, 0.14), 0 2px 6px rgba(33, 27, 15, 0.10);
+  --shadow-fab: 0 8px 22px rgba(79, 70, 229, 0.35), 0 3px 8px rgba(33, 27, 15, 0.16);
+  --shadow-dialog: 0 24px 60px rgba(33, 27, 15, 0.24), 0 8px 20px rgba(33, 27, 15, 0.14);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --canvas: #161713;
-    --surface: #232420;
-    --paper: #1C1D19;
-    --paper-2: #242520;
-    --rule: #38392F;
+    --canvas: #151612;
+    --surface: #1F211C;
+    --paper: #1B1C17;
+    --paper-2: #24261F;
+    --rule: #35372C;
     --ink: #EDECE3;
     --ink-soft: #A9AA9C;
-    --ink-faint: #74766A;
-    --accent: #7C9EC2;
+    --ink-faint: #8C8E80;
+    --accent: #8B85F5;
+    --accent-ink: #14121F;
+    --accent-soft: color-mix(in srgb, var(--accent) 18%, var(--surface));
     --rust: #D3806E;
     --moss: #8CAF8C;
-    --denim: #7C9EC2;
     --ochre: #D9A24E;
-    --focus: #7C9EC2;
+    --focus: #8B85F5;
+
+    --shadow-card: 0 1px 0 rgba(0, 0, 0, 0.4), 0 6px 16px rgba(0, 0, 0, 0.35);
+    --shadow-float: 0 10px 28px rgba(0, 0, 0, 0.5), 0 3px 8px rgba(0, 0, 0, 0.4);
+    --shadow-fab: 0 10px 26px rgba(139, 133, 245, 0.32), 0 3px 10px rgba(0, 0, 0, 0.5);
+    --shadow-dialog: 0 30px 70px rgba(0, 0, 0, 0.6), 0 10px 24px rgba(0, 0, 0, 0.45);
   }
 }
 
 :root[data-theme='dark'] {
-  --canvas: #161713;
-  --surface: #232420;
-  --paper: #1C1D19;
-  --paper-2: #242520;
-  --rule: #38392F;
+  --canvas: #151612;
+  --surface: #1F211C;
+  --paper: #1B1C17;
+  --paper-2: #24261F;
+  --rule: #35372C;
   --ink: #EDECE3;
   --ink-soft: #A9AA9C;
-  --ink-faint: #74766A;
-  --accent: #7C9EC2;
+  --ink-faint: #8C8E80;
+  --accent: #8B85F5;
+  --accent-ink: #14121F;
+  --accent-soft: color-mix(in srgb, var(--accent) 18%, var(--surface));
   --rust: #D3806E;
   --moss: #8CAF8C;
-  --denim: #7C9EC2;
   --ochre: #D9A24E;
-  --focus: #7C9EC2;
+  --focus: #8B85F5;
+
+  --shadow-card: 0 1px 0 rgba(0, 0, 0, 0.4), 0 6px 16px rgba(0, 0, 0, 0.35);
+  --shadow-float: 0 10px 28px rgba(0, 0, 0, 0.5), 0 3px 8px rgba(0, 0, 0, 0.4);
+  --shadow-fab: 0 10px 26px rgba(139, 133, 245, 0.32), 0 3px 10px rgba(0, 0, 0, 0.5);
+  --shadow-dialog: 0 30px 70px rgba(0, 0, 0, 0.6), 0 10px 24px rgba(0, 0, 0, 0.45);
 }
 
 * { box-sizing: border-box; }
+
+html, body, #root { height: 100%; }
 
 body {
   margin: 0;
@@ -72,8 +98,7 @@ body {
   position: relative;
 }
 
-/* A faint paper grain instead of a flat fill — the one texture cue in this
-   design, kept subtle enough to read as material rather than decoration. */
+/* A faint paper grain instead of a flat fill. */
 body::before {
   content: '';
   position: fixed;
@@ -109,11 +134,6 @@ body::before {
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  /* Bleeds edge-to-edge past #app's own side padding (negative margin,
-     compensating padding) rather than sitting inset within the page
-     content — an inset "section header" is what read as webpage-flat;
-     nav bars in real apps span the full width and float above the
-     content, which is also why this gets blur instead of a flat fill. */
   padding: calc(env(safe-area-inset-top) + 22px) 20px 14px;
   margin: 0 -20px 14px;
   position: sticky;
@@ -135,19 +155,26 @@ body::before {
 }
 .topbar .today { font-size: 0.8rem; color: var(--ink-soft); }
 .topbar-actions { display: flex; gap: 8px; padding-bottom: 12px; position: relative; }
-#userMenuBtn::before { content: '\25CF'; font-size: 0.7em; vertical-align: 1px; }
+#userMenuBtn::before { content: '\25CF'; font-size: 0.7em; vertical-align: 1px; color: var(--accent); }
+
+/* Radix's Popper positioning wrapper (the actual position:fixed element,
+   a sibling of .user-menu's own box) ships with z-index: auto — since
+   position:fixed always opens its own stacking context, that leaves it
+   painted *below* .topbar's z-index: 5 sticky header regardless of DOM
+   order, showing the header/filter chips through the menu. Force it above
+   every other fixed layer in the app except dialogs. */
+[data-radix-popper-content-wrapper] {
+  z-index: 9 !important;
+}
 
 .user-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
   background: var(--surface);
   border: 1px solid var(--rule);
-  border-radius: 10px;
-  box-shadow: 0 4px 14px rgba(20, 20, 16, 0.18);
+  border-radius: 12px;
+  box-shadow: var(--shadow-float);
   min-width: 220px;
-  z-index: 8;
   padding: 6px;
+  transform-origin: var(--radix-dropdown-menu-content-transform-origin);
 }
 .user-menu-name { font-weight: 600; padding: 8px 10px 4px; font-size: 0.85rem; }
 .menu-item {
@@ -159,67 +186,56 @@ body::before {
   font-family: inherit;
   font-size: 0.85rem;
   color: var(--ink);
-  padding: 8px 10px;
-  border-radius: 3px;
+  padding: 10px 10px;
+  border-radius: 6px;
   cursor: pointer;
+  outline: none;
 }
-.menu-item:hover { background: var(--paper-2); }
+.menu-item:hover, .menu-item[data-highlighted] { background: var(--paper-2); }
 .menu-item[hidden] { display: none; }
 
 .btn {
   border: 1px solid var(--ink);
   background: transparent;
   color: var(--ink);
-  border-radius: 3px;
-  padding: 8px 14px;
+  border-radius: 8px;
+  padding: 12px 16px;
+  min-height: 44px;
   font-size: 0.85rem;
   font-family: inherit;
   cursor: pointer;
-  margin-bottom: 12px;
-  transition: transform 0.1s ease, background 0.12s ease, box-shadow 0.12s ease;
 }
 .btn:hover { background: var(--paper-2); }
-.btn:active { transform: scale(0.96); }
-.btn.primary { background: var(--ink); border-color: var(--ink); color: var(--paper); }
-.btn.primary:hover { background: var(--accent); border-color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.08); }
 .btn.danger { border-color: var(--rust); color: var(--rust); }
-.btn.danger:hover { background: var(--rust); color: var(--paper); }
+.btn.danger:hover { background: var(--rust); color: #fff; }
 
 /* --- floating action button ---------------------------------------------
-   The one place elevation/shadow is spent in this design (see the brief's
-   "spend your boldness in one place") — everywhere else stays flat. */
+   The one place the signature accent + real elevation both get spent at
+   full strength — everywhere else stays quieter. */
 .fab {
   position: fixed;
   right: max(24px, calc(50vw - 320px + 24px));
   bottom: calc(24px + env(safe-area-inset-bottom));
-  width: 56px;
-  height: 56px;
+  width: 58px;
+  height: 58px;
   border-radius: 50%;
   border: none;
-  background: var(--ink);
-  color: var(--paper);
+  background: var(--accent);
+  color: var(--accent-ink);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 6px 16px rgba(20, 20, 16, 0.28), 0 2px 4px rgba(20, 20, 16, 0.22);
+  box-shadow: var(--shadow-fab);
   z-index: 7;
-  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
 }
-.fab:hover { background: var(--accent); }
-.fab:active {
-  transform: scale(0.92);
-  box-shadow: 0 2px 6px rgba(20, 20, 16, 0.24);
-}
-.fab svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.fab svg { fill: none; stroke: currentColor; stroke-width: 2.25; stroke-linecap: round; }
 
-/* --- filters: literal folder tabs, not pill chips -------------------- */
+/* --- filters: plain text + a color dot, not a shaped tab -------------- */
 
 .filters { margin-bottom: 18px; }
-/* Plain text + a color dot, not a shape — an earlier clip-path "folder
-   tab" version read as literal plastic index tabs rather than an app
-   control. Color still carries the category identity (the dot), it just
-   isn't spent on a skeuomorphic container anymore. */
 .tab-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
 .category-filter {
   display: inline-flex;
@@ -231,9 +247,9 @@ body::before {
   color: var(--ink-soft);
   font-family: inherit;
   font-size: 0.8rem;
-  padding: 5px 12px 5px 10px;
+  padding: 6px 13px 6px 11px;
+  min-height: 32px;
   cursor: pointer;
-  transition: color 0.12s ease, transform 0.1s ease, background 0.12s ease, border-color 0.12s ease;
 }
 .category-filter .dot {
   width: 7px;
@@ -242,15 +258,13 @@ body::before {
   background: var(--dot, var(--ink-faint));
   flex: 0 0 auto;
 }
-/* Active state tints with the category's own color rather than a uniform
-   accent — "All" (no --dot set) falls back to ink, matching the status row. */
 .category-filter.active {
   color: var(--dot, var(--ink));
   border-color: var(--dot, var(--ink));
   background: color-mix(in srgb, var(--dot, var(--ink)) 14%, var(--paper));
   font-weight: 600;
 }
-.category-filter:active { transform: scale(0.95); }
+
 .status-row {
   display: flex;
   align-items: center;
@@ -260,42 +274,43 @@ body::before {
   border-bottom: 1px solid var(--rule);
   padding-bottom: 8px;
 }
-.status-tabs { display: flex; gap: 16px; }
+.status-tabs { display: flex; gap: 8px; margin-left: -10px; }
+/* Same pattern as the checkbox control: a small visual label inside a real
+   44px-tall hit area, via padding rather than shrinking the touch target
+   to the text's own size. */
 .status-tab {
   border: none;
   background: none;
   font-family: inherit;
   font-size: 0.82rem;
-  color: var(--ink-faint);
+  color: var(--ink-soft);
   cursor: pointer;
-  padding: 2px 0;
+  padding: 12px 10px;
+  min-height: 44px;
   position: relative;
-  transition: color 0.15s ease;
 }
 .status-tab.active { color: var(--ink); font-weight: 600; }
 .status-tab.active::after {
   content: '';
   position: absolute;
-  left: 0; right: 0; bottom: -9px;
+  left: 10px; right: 10px; bottom: 6px;
   height: 2px;
-  background: var(--ink);
-  animation: underline-in 0.18s ease;
-}
-@keyframes underline-in {
-  from { transform: scaleX(0); }
-  to { transform: scaleX(1); }
+  background: var(--accent);
 }
 
-/* --- sort/group controls: quiet, native selects, not another pill row -- */
+/* --- sort/group controls: quiet native selects with a real hit area ---- */
 
-.list-controls { display: flex; gap: 14px; }
+.list-controls { display: flex; gap: 4px; }
 .control-select {
   position: relative;
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  padding: 12px 16px 12px 8px;
+  min-height: 44px;
+  margin: -12px -4px;
 }
-.control-label { font-size: 0.78rem; color: var(--ink-faint); }
+.control-label { font-size: 0.78rem; color: var(--ink-soft); }
 .control-select select {
   appearance: none;
   -webkit-appearance: none;
@@ -305,25 +320,25 @@ body::before {
   font-size: 0.78rem;
   font-weight: 600;
   color: var(--ink-soft);
-  padding: 2px 14px 2px 0;
+  padding: 0 14px 0 0;
   margin: 0;
   cursor: pointer;
 }
-.control-select select:focus { color: var(--ink); outline: none; }
+.control-select select:focus-visible { color: var(--ink); }
 .control-select::after {
   content: '';
   position: absolute;
-  right: 1px;
+  right: 17px;
   top: 50%;
   width: 5px;
   height: 5px;
-  border-right: 1.5px solid var(--ink-faint);
-  border-bottom: 1.5px solid var(--ink-faint);
+  border-right: 1.5px solid var(--ink-soft);
+  border-bottom: 1.5px solid var(--ink-soft);
   transform: translateY(-65%) rotate(45deg);
   pointer-events: none;
 }
 
-/* --- grouped sections: a heading above its own card, repeated per group - */
+/* --- grouped sections -------------------------------------------------- */
 
 .task-group { margin-bottom: 20px; }
 .task-group:last-child { margin-bottom: 0; }
@@ -333,20 +348,15 @@ body::before {
   gap: 6px;
   font-size: 0.78rem;
   font-weight: 600;
-  color: var(--ink-faint);
+  color: var(--ink-soft);
   text-transform: uppercase;
   letter-spacing: 0.02em;
   margin: 0 2px 8px;
 }
 .task-group-heading .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--dot, var(--ink-faint)); flex: 0 0 auto; }
 
-/* --- task list: a grouped surface, not a full-bleed content list --------
-   Rows ruled by hairlines *inside a bounded card* (the native "grouped
-   table" idiom — iOS Settings/Reminders) rather than running edge-to-edge
-   against the page canvas, which read as an article/list page (a book
-   list) rather than app chrome. The card is --surface, distinct from the
-   --canvas page background, so it visibly sits on top rather than being
-   part of the page. */
+/* --- task list: a grouped, elevated card ------------------------------- */
+
 #taskList { padding-bottom: 76px; }
 
 .task-list {
@@ -354,7 +364,8 @@ body::before {
   flex-direction: column;
   background: var(--surface);
   border: 1px solid var(--rule);
-  border-radius: 14px;
+  border-radius: 16px;
+  box-shadow: var(--shadow-card);
   overflow: hidden;
 }
 
@@ -365,6 +376,7 @@ body::before {
   gap: 12px;
   align-items: flex-start;
   max-width: 100%;
+  overflow: hidden;
 }
 .task-row:last-child { border-bottom: none; }
 .task-row.completed { opacity: 0.5; }
@@ -374,7 +386,7 @@ body::before {
   width: 6px;
   height: 34px;
   margin-top: 1px;
-  border-radius: 1px;
+  border-radius: 3px;
 }
 
 .check {
@@ -389,31 +401,29 @@ body::before {
   align-items: center;
   justify-content: center;
 }
-.check:active .check-box { transform: scale(0.88); }
 .check-box {
-  width: 19px;
-  height: 19px;
+  width: 20px;
+  height: 20px;
   border: 1.5px solid var(--ink-soft);
-  border-radius: 2px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.1s ease;
 }
 .check-box svg { width: 13px; height: 13px; overflow: visible; }
 .check-box path {
   fill: none;
-  stroke: var(--paper);
+  stroke: var(--accent-ink);
   stroke-width: 2.4;
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-dasharray: 20;
   stroke-dashoffset: 20;
 }
-.task-row.completed .check-box { background: var(--ink); border-color: var(--ink); }
+.task-row.completed .check-box { background: var(--accent); border-color: var(--accent); }
 .task-row.completed .check-box path { stroke-dashoffset: 0; }
-.check.drawing .check-box { background: var(--ink); border-color: var(--ink); transition: background 0.1s; }
-.check.drawing .check-box path { stroke-dashoffset: 0; transition: stroke-dashoffset 0.32s ease; }
+.check.drawing .check-box { background: var(--accent); border-color: var(--accent); transition: background 0.12s; }
+.check.drawing .check-box path { stroke-dashoffset: 0; transition: stroke-dashoffset 0.36s cubic-bezier(0.34, 1.56, 0.64, 1); }
 
 .task-body { flex: 1; min-width: 0; cursor: pointer; }
 .task-title {
@@ -432,10 +442,8 @@ body::before {
   font-size: 0.78rem;
   color: var(--ink-soft);
 }
-.task-meta .category-name { color: var(--ink-faint); }
-.task-meta .flag {
-  font-weight: 600;
-}
+.task-meta .category-name { color: var(--ink-soft); }
+.task-meta .flag { font-weight: 600; }
 .task-meta .flag.urgent { color: var(--rust); }
 .task-meta .flag.high { color: var(--ochre); }
 .task-meta .recur::before { content: '↻ '; }
@@ -468,57 +476,88 @@ body::before {
   text-align: center;
   font-size: 0.95rem;
 }
-
-/* --- dialog ------------------------------------------------------------ */
-
-dialog {
+.empty .empty-clear {
+  display: inline-block;
+  margin-top: 12px;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.85rem;
+  background: none;
   border: none;
-  border-radius: 14px;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 6px;
+  font-family: inherit;
+}
+
+/* --- dialogs (Radix) ----------------------------------------------------
+   Radix owns focus trap / outside-dismiss / escape; framer-motion owns the
+   entrance/exit choreography (the overlay component wraps these in
+   AnimatePresence + motion.div, so this file only needs static box style). */
+
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 14, 10, 0.5);
+  z-index: 20;
+}
+:root[data-theme='dark'] .dialog-overlay { background: rgba(0, 0, 0, 0.65); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .dialog-overlay { background: rgba(0, 0, 0, 0.65); }
+}
+.dialog-center {
+  position: fixed;
+  inset: 0;
+  z-index: 21;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  pointer-events: none;
+}
+.dialog-content {
+  pointer-events: auto;
+  border: none;
+  border-radius: 18px;
   background: var(--surface);
   color: var(--ink);
   padding: 24px;
-  width: min(480px, 92vw);
+  width: min(480px, 100%);
   max-height: 85vh;
   overflow-y: auto;
-  box-shadow: 0 16px 40px rgba(20, 20, 16, 0.28);
-  /* One dialog, one moment: a brief settle-in rather than an instant pop.
-     @starting-style is progressive enhancement — browsers without it just
-     get the old instant open, no functional loss. */
-  transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.2, 0.8, 0.3, 1), overlay 0.18s allow-discrete, display 0.18s allow-discrete;
-  opacity: 1;
-  transform: translateY(0) scale(1);
+  box-shadow: var(--shadow-dialog);
 }
-@starting-style {
-  dialog[open] { opacity: 0; transform: translateY(10px) scale(0.98); }
-}
-dialog::backdrop {
-  background: rgba(20, 20, 16, 0.45);
-  transition: opacity 0.18s ease, overlay 0.18s allow-discrete, display 0.18s allow-discrete;
-  opacity: 1;
-}
-@starting-style {
-  dialog[open]::backdrop { opacity: 0; }
-}
-dialog h2 {
+.dialog-content h2 {
   font-weight: 600;
   font-size: 1.15rem;
   margin: 0 0 16px;
 }
-dialog label { display: block; font-size: 0.8rem; color: var(--ink-soft); margin-bottom: 14px; }
-dialog input, dialog select, dialog textarea {
+.dialog-content label,
+.dialog-content .field-label { display: block; font-size: 0.8rem; color: var(--ink-soft); margin-bottom: 14px; }
+.dialog-content .field { margin-bottom: 14px; }
+.dialog-content .field .field-label { margin-bottom: 0; }
+.dialog-content input, .dialog-content select, .dialog-content textarea {
   width: 100%;
   margin-top: 5px;
   background: var(--paper-2);
   border: 1px solid var(--rule);
   color: var(--ink);
-  border-radius: 3px;
-  padding: 9px 10px;
+  border-radius: 8px;
+  padding: 10px 12px;
   font-size: 0.95rem;
   font-family: inherit;
 }
-dialog input:focus, dialog select:focus, dialog textarea:focus { border-color: var(--ink); }
+.dialog-content input:focus-visible, .dialog-content select:focus-visible, .dialog-content textarea:focus-visible { border-color: var(--accent); }
 .row { display: flex; gap: 14px; }
 .row > label { flex: 1; }
+/* Fix: due-date/repeats used to split 50/50, clipping the select's text
+   ("Never" rendering as "Nev"). Give the datetime input more room and let
+   the row stack under narrow width instead of squeezing both. */
+.row.due-repeat > label.due { flex: 3 1 0; }
+.row.due-repeat > label.repeat { flex: 2 1 0; min-width: 108px; }
+@media (max-width: 420px) {
+  .row.due-repeat { flex-direction: column; gap: 0; }
+}
 .dialog-actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 6px; }
 .form-error {
   color: var(--rust);
@@ -534,15 +573,13 @@ dialog input:focus, dialog select:focus, dialog textarea:focus { border-color: v
   background: var(--paper-2);
   color: var(--ink-soft);
   border-radius: 999px;
-  padding: 5px 12px;
+  padding: 7px 13px;
   font-size: 0.8rem;
   font-family: inherit;
   cursor: pointer;
-  transition: transform 0.1s ease, background 0.12s ease, color 0.12s ease;
 }
-.assignee-pill.active { background: var(--ink); border-color: var(--ink); color: var(--paper); }
-.assignee-pill:active { transform: scale(0.94); }
-.assignee-picker .empty-note { font-size: 0.8rem; color: var(--ink-faint); font-style: italic; }
+.assignee-pill.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.assignee-picker .empty-note { font-size: 0.8rem; color: var(--ink-soft); font-style: italic; }
 
 /* --- invite dialog --------------------------------------------------------- */
 
@@ -552,8 +589,8 @@ dialog input:focus, dialog select:focus, dialog textarea:focus { border-color: v
   flex: 1;
   background: var(--paper-2);
   border: 1px solid var(--rule);
-  border-radius: 3px;
-  padding: 9px 10px;
+  border-radius: 8px;
+  padding: 10px 12px;
   font-size: 0.85rem;
   color: var(--ink);
   font-family: inherit;
@@ -570,10 +607,6 @@ dialog input:focus, dialog select:focus, dialog textarea:focus { border-color: v
   padding: 24px;
   background: var(--canvas);
 }
-/* [class]{display:flex} beats the UA [hidden]{display:none} rule on
-   specificity ties broken by cascade order — a scoped override is needed,
-   same fix as the key-banner bug earlier in this app's history. */
-.auth-screen[hidden] { display: none; }
 .auth-card { width: min(360px, 100%); text-align: center; }
 .auth-card h1 {
   font-family: 'Fraunces', Georgia, serif;
@@ -595,19 +628,9 @@ dialog input:focus, dialog select:focus, dialog textarea:focus { border-color: v
   background: var(--paper-2);
   border: 1px solid var(--rule);
   color: var(--ink);
-  border-radius: 3px;
-  padding: 10px;
+  border-radius: 8px;
+  padding: 12px;
   font-size: 1rem;
   font-family: inherit;
 }
-.auth-card .btn { width: 100%; padding: 11px; font-size: 0.9rem; }
-.auth-card .switch {
-  margin-top: 18px;
-  font-size: 0.82rem;
-  color: var(--ink-soft);
-  background: none;
-  border: none;
-  text-decoration: underline;
-  cursor: pointer;
-  font-family: inherit;
-}
+.auth-card .btn { width: 100%; padding: 13px; font-size: 0.9rem; }

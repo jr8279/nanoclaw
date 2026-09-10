@@ -32,6 +32,11 @@ HTTP(S).
 
 ## Run it (Docker)
 
+The image build has a frontend build stage (`npm ci` with devDependencies,
+`vite build`) ahead of the slim runtime stage (prod deps only + `src/` +
+the built `public/`) — nothing to do differently here, `docker build` runs
+the frontend build for you.
+
 ```bash
 cd apps/todo
 docker build -t nanoclaw-todo .
@@ -76,27 +81,62 @@ host's loopback).
 ```bash
 cd apps/todo
 npm install
+npm run build   # builds web/ (Vite/React) into public/
 TODO_RP_ID=todo.yourdomain.com TODO_ORIGIN=https://todo.yourdomain.com \
   TODO_API_KEY=$(openssl rand -hex 24) npm start
 ```
 
-### Run the test suite
+## Frontend
+
+The PWA frontend is React + Vite, living under `web/` (`web/index.html`,
+`web/src/`, plus PWA-only static assets — `manifest.json`, `icons/`,
+`sw.js` — under `web/public/` that Vite copies through verbatim).
+`vite.config.js` builds it with `root: 'web'` and
+`outDir: '../public'`, so `public/` is a **build artifact** — it's
+`.gitignore`'d, not hand-edited, and `express.static` (`src/app.js`) serves
+whatever's in it without knowing or caring that it came from a bundler.
+
+```bash
+npm run dev:api   # Express API, --watch, on TODO_PORT (default 8787)
+npm run dev:web   # Vite dev server with hot reload, proxies /api to dev:api
+npm run build     # vite build -> public/ (what Docker/`npm start` serve)
+```
+
+Run `dev:api` and `dev:web` in separate terminals for local frontend work;
+`vite.config.js`'s dev-server proxy points at `http://localhost:8787` by
+default, override with `TODO_DEV_API_URL` if the API runs elsewhere.
+
+Styling: one design-token stylesheet (`web/src/styles/index.css`) covers
+the whole app — canvas/surface elevation hierarchy, the signature accent,
+light/dark tokens — components stay unstyled-by-class, not per-component
+CSS files. Interaction/animation: Radix UI primitives
+(`@radix-ui/react-dialog`, `@radix-ui/react-dropdown-menu`) for accessible
+dialog/menu behavior (focus trap, outside-dismiss, escape), Framer Motion
+for the spring-based micro-interactions (dialog open/close, list
+enter/exit on filter/sort/group changes, the checkbox-complete draw,
+category-chip and assignee-pill press feedback).
+
+### Run the test suites
 
 ```bash
 cd apps/todo
-npm test
+npm test          # backend: node --test against src/ (REST API, auth, migrations)
+npm run test:web  # frontend: vitest + React Testing Library against web/src
 ```
 
-Covers the REST API (validation, recurrence math, ownership/visibility
-scoping across users, cascading deletes, auth), the auth module (sessions,
-invites, WebAuthn option generation), migrations (including upgrading a
-pre-multi-user database), and the PWA's client-side logic (link parsing,
-the save-failure UI path, CSS structural checks). The full passkey
-register/login *ceremony* (real WebAuthn crypto) isn't exercised by this
-suite — jsdom has no WebAuthn implementation — but was verified manually
-against a real browser using Chrome DevTools Protocol's virtual
-authenticator (bootstrap → logout → login with the same passkey → invite
-→ redeem → tag a task → cross-user visibility, all passing).
+The backend suite covers the REST API (validation, recurrence math,
+ownership/visibility scoping across users, cascading deletes, auth), the
+auth module (sessions, invites, WebAuthn option generation), and
+migrations (including upgrading a pre-multi-user database). The frontend
+suite covers the pure task-list logic (sort/group/link-parsing — ported
+1:1 from the old vanilla-JS suite) and component-level regression coverage
+(the task dialog's save-failure path, title/due-date validation, editing
+an existing task prefills every field). The full passkey register/login
+*ceremony* (real WebAuthn crypto) isn't exercised by either suite — jsdom
+has no WebAuthn implementation — but was verified manually against a real
+browser using Chrome DevTools Protocol's virtual authenticator (bootstrap
+→ logout → login with the same passkey → invite → redeem → tag a task →
+cross-user visibility, all passing).
 
 ## Install as a PWA (phone / desktop)
 
