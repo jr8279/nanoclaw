@@ -1,24 +1,21 @@
 const state = {
+  currentUser: null,
   categories: [],
+  users: [],
   tasks: [],
   statusFilter: localStorage.getItem('todoStatusFilter') || 'pending',
   categoryFilter: localStorage.getItem('todoCategoryFilter')
     ? Number(localStorage.getItem('todoCategoryFilter'))
     : null,
+  selectedAssigneeIds: new Set(),
 };
-
-function apiKey() {
-  return localStorage.getItem('todoApiKey') || '';
-}
 
 async function api(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
-  const key = apiKey();
-  if (key) headers['X-API-Key'] = key;
   const res = await fetch(path, { ...options, headers });
   if (res.status === 401) {
-    document.getElementById('keyBanner').hidden = false;
-    throw new Error('unauthorized');
+    await showAuthScreen();
+    throw new Error('signed out');
   }
   if (!res.ok && res.status !== 204) {
     const body = await res.json().catch(() => ({}));
@@ -28,8 +25,18 @@ async function api(path, options = {}) {
   return res.json();
 }
 
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function escapeAttr(str) {
+  return escapeHtml(str);
+}
+
 function categoryById(id) {
   return state.categories.find((c) => c.id === id);
+}
+function userById(id) {
+  return state.users.find((u) => u.id === id);
 }
 
 function fmtDue(iso) {
@@ -42,12 +49,19 @@ function isOverdue(task) {
   return task.status === 'pending' && task.due_date && new Date(task.due_date) < new Date();
 }
 
+// --- data loading -----------------------------------------------------
+
 async function loadCategories() {
   state.categories = await api('/api/categories');
   renderCategoryChips();
   const select = document.getElementById('fCategory');
   select.innerHTML = '<option value="">No category</option>' +
     state.categories.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+}
+
+async function loadUsers() {
+  state.users = await api('/api/users');
+  renderAssigneePicker();
 }
 
 function renderCategoryChips() {
@@ -107,6 +121,17 @@ function renderTasks() {
       // date itself stays plain rather than doubling up the red accent.
       const dueMeta = due ? `<span class="due">Due ${due}</span>` : '';
       const recurMeta = due && task.recurrence ? '<span class="recur">Repeats</span>' : '';
+      // Someone else's task assigned to me, or a task I own that's tagged
+      // to others — both are worth surfacing since this is a shared board.
+      const owner = task.owner_user_id != null ? userById(task.owner_user_id) : null;
+      const fromMeta =
+        owner && state.currentUser && owner.id !== state.currentUser.id
+          ? `<span class="from">${escapeHtml(owner.display_name)}</span>`
+          : '';
+      const otherAssignees = task.assignees.filter((a) => !state.currentUser || a.id !== state.currentUser.id);
+      const taggedMeta = otherAssignees.length
+        ? `<span class="tagged">${otherAssignees.map((a) => escapeHtml(a.display_name)).join(', ')}</span>`
+        : '';
       const checkLabel = task.status === 'completed' ? 'Mark incomplete' : 'Mark complete';
       return `
         <div class="${classes}" data-id="${task.id}">
@@ -121,6 +146,8 @@ function renderTasks() {
               ${overdueFlag}
               ${dueMeta}
               ${recurMeta}
+              ${fromMeta}
+              ${taggedMeta}
               ${cat ? `<span class="category-name">${escapeHtml(cat.name)}</span>` : ''}
             </div>
             ${task.notes ? `<div class="task-notes">${escapeHtml(task.notes)}</div>` : ''}
@@ -149,14 +176,40 @@ function renderTasks() {
   });
 }
 
-function escapeHtml(str) {
-  return String(str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
-function escapeAttr(str) {
-  return escapeHtml(str);
+// --- assignee picker (task dialog) -----------------------------------------
+
+function renderAssigneePicker() {
+  const box = document.getElementById('fAssignees');
+  const others = state.users.filter((u) => !state.currentUser || u.id !== state.currentUser.id);
+  if (!others.length) {
+    box.innerHTML = '<span class="empty-note">No one else has an account yet.</span>';
+    return;
+  }
+  box.innerHTML = others
+    .map(
+      (u) =>
+        `<button type="button" class="assignee-pill ${state.selectedAssigneeIds.has(u.id) ? 'active' : ''}" data-user="${u.id}">${escapeHtml(u.display_name)}</button>`,
+    )
+    .join('');
+  box.querySelectorAll('.assignee-pill').forEach((btn) => {
+    // Toggle the class in place rather than calling renderAssigneePicker()
+    // again — replacing a button's own DOM node from inside its own click
+    // handler is fragile (Chromium/Playwright can retry a click whose
+    // target got swapped out mid-dispatch, double-firing the toggle).
+    btn.addEventListener('click', () => {
+      const id = Number(btn.dataset.user);
+      if (state.selectedAssigneeIds.has(id)) {
+        state.selectedAssigneeIds.delete(id);
+        btn.classList.remove('active');
+      } else {
+        state.selectedAssigneeIds.add(id);
+        btn.classList.add('active');
+      }
+    });
+  });
 }
 
-// --- dialog -------------------------------------------------------------
+// --- task dialog -------------------------------------------------------
 
 const dialog = document.getElementById('taskDialog');
 const formError = document.getElementById('formError');
@@ -179,6 +232,8 @@ function openDialog(id) {
   document.getElementById('fFreq').value = task?.recurrence?.freq || '';
   document.getElementById('fLinks').value = task ? task.links.map((l) => `${l.label || ''} ${l.url}`.trim()).join('\n') : '';
   document.getElementById('deleteBtn').hidden = !task;
+  state.selectedAssigneeIds = new Set(task ? task.assignees.map((a) => a.id) : []);
+  renderAssigneePicker();
   dialog.showModal();
 }
 
@@ -226,6 +281,7 @@ document.getElementById('taskForm').addEventListener('submit', async (e) => {
     due_date: document.getElementById('fDue').value ? new Date(document.getElementById('fDue').value).toISOString() : null,
     recurrence: document.getElementById('fFreq').value ? { freq: document.getElementById('fFreq').value, interval: 1 } : null,
     links: parseLinks(document.getElementById('fLinks').value),
+    assignee_ids: [...state.selectedAssigneeIds],
   };
   if (!payload.title) {
     showFormError('Title is required.');
@@ -274,42 +330,210 @@ document.querySelectorAll('[data-status]').forEach((btn) => {
   });
 });
 
-document.getElementById('keySave').addEventListener('click', async () => {
-  const keyError = document.getElementById('keyError');
-  const val = document.getElementById('keyInput').value.trim();
-  keyError.hidden = true;
-  if (!val) {
-    keyError.textContent = 'Enter an API key.';
-    keyError.hidden = false;
-    return;
-  }
-  // Validate before committing — an unverified key that turns out to be
-  // wrong just reopens the banner with no explanation for why.
-  const res = await fetch('/api/categories', { headers: { 'X-API-Key': val } }).catch(() => null);
-  if (!res || !res.ok) {
-    keyError.textContent = 'That key was rejected by the server.';
-    keyError.hidden = false;
-    return;
-  }
-  localStorage.setItem('todoApiKey', val);
-  document.getElementById('keyBanner').hidden = true;
-  loadCategories().then(loadTasks);
+// --- user menu + invites ------------------------------------------------
+
+const userMenu = document.getElementById('userMenu');
+const userMenuBtn = document.getElementById('userMenuBtn');
+
+function closeUserMenu() {
+  userMenu.hidden = true;
+  userMenuBtn.setAttribute('aria-expanded', 'false');
+}
+
+userMenuBtn.addEventListener('click', () => {
+  const willOpen = userMenu.hidden;
+  userMenu.hidden = !willOpen;
+  userMenuBtn.setAttribute('aria-expanded', String(willOpen));
+});
+document.addEventListener('click', (e) => {
+  if (!userMenu.hidden && !userMenu.contains(e.target) && e.target !== userMenuBtn) closeUserMenu();
 });
 
-// --- init -----------------------------------------------------------------
-
-document.getElementById('todayLabel').textContent = new Date().toLocaleDateString(undefined, {
-  weekday: 'long',
-  month: 'long',
-  day: 'numeric',
+document.getElementById('signOutBtn').addEventListener('click', async () => {
+  await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+  closeUserMenu();
+  await showAuthScreen();
 });
 
-document.querySelectorAll('[data-status]').forEach((b) => b.classList.toggle('active', b.dataset.status === state.statusFilter));
+document.getElementById('addDeviceBtn').addEventListener('click', async () => {
+  closeUserMenu();
+  try {
+    const { options, challengeId } = await api('/api/auth/register/options', { method: 'POST', body: JSON.stringify({}) });
+    const response = await createPasskey(options);
+    await api('/api/auth/register/verify', { method: 'POST', body: JSON.stringify({ challengeId, response }) });
+    alert('New passkey added for this device.');
+  } catch (err) {
+    alert(err.message || 'Could not add a passkey on this device.');
+  }
+});
+
+const inviteDialog = document.getElementById('inviteDialog');
+document.getElementById('inviteBtn').addEventListener('click', async () => {
+  closeUserMenu();
+  try {
+    const { token } = await api('/api/invites', { method: 'POST', body: JSON.stringify({}) });
+    const link = `${location.origin}/?invite=${token}`;
+    document.getElementById('inviteLinkOutput').value = link;
+    inviteDialog.showModal();
+  } catch (err) {
+    alert(err.message || 'Could not create an invite.');
+  }
+});
+document.getElementById('inviteCopyBtn').addEventListener('click', async () => {
+  const input = document.getElementById('inviteLinkOutput');
+  input.select();
+  try {
+    await navigator.clipboard.writeText(input.value);
+  } catch {
+    document.execCommand('copy');
+  }
+});
+document.getElementById('inviteCloseBtn').addEventListener('click', () => inviteDialog.close());
+
+// --- auth screen: bootstrap / invite redemption / login -------------------
+
+const authScreen = document.getElementById('authScreen');
+const authBody = document.getElementById('authBody');
+const authErrorEl = document.getElementById('authError');
+const appRoot = document.getElementById('app');
+
+function showAuthError(message) {
+  authErrorEl.textContent = message;
+  authErrorEl.hidden = !message;
+}
+
+function renderLoginView({ canRegisterHint } = {}) {
+  authBody.innerHTML = `
+    <p class="lead">Sign in with the passkey on this device.</p>
+    <button id="loginBtn" class="btn primary" type="button">Sign in</button>
+    ${canRegisterHint ? '<p class="lead" style="margin-top:16px">Have an invite link? Open it directly to create an account.</p>' : ''}
+  `;
+  document.getElementById('loginBtn').addEventListener('click', async () => {
+    showAuthError('');
+    try {
+      const { options, challengeId } = await api('/api/auth/login/options', { method: 'POST', body: JSON.stringify({}) });
+      const response = await getPasskey(options);
+      await api('/api/auth/login/verify', { method: 'POST', body: JSON.stringify({ challengeId, response }) });
+      await boot();
+    } catch (err) {
+      showAuthError(err.message || 'Sign-in failed. Try again.');
+    }
+  });
+}
+
+function renderNameEntryView({ heading, lead, onSubmit }) {
+  authBody.innerHTML = `
+    <p class="lead">${lead}</p>
+    <label>Your name
+      <input id="authName" maxlength="60" placeholder="${escapeAttr(heading)}" />
+    </label>
+    <button id="authSubmitBtn" class="btn primary" type="button">Create passkey</button>
+  `;
+  document.getElementById('authSubmitBtn').addEventListener('click', async () => {
+    const name = document.getElementById('authName').value.trim();
+    if (!name) return showAuthError('Enter your name.');
+    showAuthError('');
+    try {
+      await onSubmit(name);
+    } catch (err) {
+      showAuthError(err.message || 'Could not create your passkey. Try again.');
+    }
+  });
+}
+
+function renderBootstrapView() {
+  renderNameEntryView({
+    heading: 'e.g. Ryan',
+    lead: "No account exists yet — you'll be the first, and become the admin.",
+    onSubmit: async (name) => {
+      const { options, challengeId } = await api('/api/auth/register/options', {
+        method: 'POST',
+        body: JSON.stringify({ displayName: name }),
+      });
+      const response = await createPasskey(options);
+      await api('/api/auth/register/verify', {
+        method: 'POST',
+        body: JSON.stringify({ challengeId, response, bootstrap: true }),
+      });
+      history.replaceState(null, '', '/');
+      await boot();
+    },
+  });
+}
+
+function renderInviteView(inviteToken) {
+  renderNameEntryView({
+    heading: 'Your name',
+    lead: "You've been invited to this household's todo board.",
+    onSubmit: async (name) => {
+      const { options, challengeId } = await api('/api/auth/register/options', {
+        method: 'POST',
+        body: JSON.stringify({ displayName: name, inviteToken }),
+      });
+      const response = await createPasskey(options);
+      await api('/api/auth/register/verify', {
+        method: 'POST',
+        body: JSON.stringify({ challengeId, response, inviteToken }),
+      });
+      history.replaceState(null, '', '/');
+      await boot();
+    },
+  });
+}
+
+/** Show the sign-in/register screen and hide the app. Resolves once rendered. */
+async function showAuthScreen() {
+  appRoot.hidden = true;
+  authScreen.hidden = false;
+  showAuthError('');
+
+  const params = new URLSearchParams(location.search);
+  const inviteToken = params.get('invite');
+
+  if (inviteToken) {
+    const res = await fetch(`/api/invites/${encodeURIComponent(inviteToken)}`);
+    if (res.ok) return renderInviteView(inviteToken);
+    showAuthError('That invite link is invalid, used, or expired.');
+    return renderLoginView();
+  }
+
+  const me = await fetch('/api/auth/me').then((r) => r.json());
+  if (me.bootstrap_available) return renderBootstrapView();
+  renderLoginView({ canRegisterHint: true });
+}
+
+// --- boot -----------------------------------------------------------------
+
+async function boot() {
+  const me = await fetch('/api/auth/me').then((r) => r.json());
+  if (!me.user) {
+    await showAuthScreen();
+    return;
+  }
+  state.currentUser = me.user;
+  authScreen.hidden = true;
+  appRoot.hidden = false;
+
+  document.getElementById('userMenuBtn').textContent = me.user.display_name;
+  document.getElementById('userMenuName').textContent = me.user.display_name;
+  document.getElementById('inviteBtn').hidden = !me.user.is_admin;
+
+  document.getElementById('todayLabel').textContent = new Date().toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
+  document
+    .querySelectorAll('[data-status]')
+    .forEach((b) => b.classList.toggle('active', b.dataset.status === state.statusFilter));
+
+  await loadUsers();
+  await loadCategories();
+  await loadTasks();
+}
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
 
-loadCategories()
-  .then(loadTasks)
-  .catch(() => {});
+boot().catch(() => showAuthScreen());

@@ -2,12 +2,20 @@
  * Todo MCP server for NanoClaw
  * Exposes the self-hosted nanoclaw-todo app (apps/todo/) as tools for the
  * container agent — list, create, complete, reopen, update and delete tasks,
- * plus category lookup. Talks to the todo app's REST API over
- * host.docker.internal (the todo app runs on the host/KVM, not in-container).
+ * plus category and household-member lookup. Talks to the todo app's REST
+ * API over host.docker.internal (the todo app runs on the host/KVM, not
+ * in-container).
+ *
+ * The todo app is multi-user (passkey-authenticated humans, each with their
+ * own board). This tool authenticates as a separate *service* credential
+ * (TODO_API_KEY) rather than as any one person, so every task it creates
+ * must say which household member it belongs to (owner_id) — there's no
+ * "me" to default to. Use todo_list_users to resolve a name to an id.
  *
  * TODO_API_URL defaults to the todo app's default port. TODO_API_KEY is
- * forwarded only if the host has one configured — the todo app allows
- * unauthenticated access when no key is set (trusted LAN deployments).
+ * forwarded only if the host has one configured — without it this tool
+ * can't authenticate at all (the todo app requires either a signed-in
+ * session or this service key for every task/category/user endpoint).
  */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -52,6 +60,19 @@ async function todoJson(apiPath: string, options?: RequestInit): Promise<{ ok: b
 const server = new McpServer({ name: 'todo', version: '1.0.0' });
 
 server.tool(
+  'todo_list_users',
+  'List the household members who have an account on the todo board, with their ids. ' +
+    'Call this before creating or assigning a task so you know whose board it belongs on — ' +
+    'match the name the person used in conversation to a display_name here.',
+  {},
+  async () => {
+    const { ok, body } = await todoJson('/api/users');
+    if (!ok) return textResult(`Failed to list users: ${JSON.stringify(body)}`, true);
+    return textResult(JSON.stringify(body, null, 2));
+  },
+);
+
+server.tool(
   'todo_list_categories',
   'List the todo categories (e.g. Home, Office, Kids School) with their ids. Use before creating a task with a category.',
   {},
@@ -64,7 +85,9 @@ server.tool(
 
 server.tool(
   'todo_list_tasks',
-  'List todo tasks. Defaults to pending tasks only. Filter by status, category, importance, or a due-date range.',
+  'List todo tasks. Defaults to pending tasks only. Filter by status, category, importance, ' +
+    'a due-date range, or owner_id (whose board to look at — use todo_list_users to resolve a name). ' +
+    'Omitting owner_id lists tasks across every household member.',
   {
     status: z.enum(['pending', 'completed', 'all']).optional().describe('Defaults to pending'),
     category_id: z.number().int().optional(),
@@ -72,6 +95,7 @@ server.tool(
     due_before: z.string().optional().describe('ISO-8601 timestamp'),
     due_after: z.string().optional().describe('ISO-8601 timestamp'),
     q: z.string().optional().describe('Search title/notes'),
+    owner_id: z.number().int().optional().describe('Limit to one household member\'s board'),
   },
   async (params) => {
     const qs = new URLSearchParams();
@@ -86,12 +110,16 @@ server.tool(
 
 server.tool(
   'todo_create_task',
-  'Create a new todo task. Use todo_list_categories first if you need a category_id. ' +
+  'Create a new todo task. owner_id is required — use todo_list_users first to find whose board ' +
+    'this belongs on (this tool has no "me", it always acts on behalf of the household, not one person). ' +
+    'Use todo_list_categories first if you need a category_id. To tag other household members on it ' +
+    '(so it shows on their board too), pass their ids in assignee_ids. ' +
     'For recurring tasks, set recurrence_freq (and optionally recurrence_interval) — ' +
     'this requires due_date to be set too, since recurrence is anchored on it. ' +
     'Link URLs must be http:// or https:// (or mailto:) — anything else is rejected.',
   {
     title: z.string(),
+    owner_id: z.number().int().describe('Whose board this task belongs on — see todo_list_users'),
     notes: z.string().optional(),
     category_id: z.number().int().optional(),
     importance: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
@@ -102,6 +130,10 @@ server.tool(
       .array(z.object({ url: z.string(), label: z.string().optional() }))
       .optional()
       .describe('Reference links (http/https/mailto only), e.g. a portal URL or document'),
+    assignee_ids: z
+      .array(z.number().int())
+      .optional()
+      .describe('Other household members to tag on this task — see todo_list_users'),
   },
   async ({ recurrence_freq, recurrence_interval, ...rest }) => {
     const payload = {
@@ -117,7 +149,8 @@ server.tool(
 
 server.tool(
   'todo_update_task',
-  'Update fields on an existing task (partial update — only send fields to change).',
+  'Update fields on an existing task (partial update — only send fields to change). ' +
+    'assignee_ids, if sent, replaces the full set of tagged household members.',
   {
     id: z.number().int(),
     title: z.string().optional(),
@@ -128,6 +161,7 @@ server.tool(
     status: z.enum(['pending', 'completed', 'archived']).optional(),
     recurrence_freq: z.enum(['daily', 'weekly', 'monthly', 'yearly']).nullable().optional(),
     recurrence_interval: z.number().int().min(1).optional(),
+    assignee_ids: z.array(z.number().int()).optional(),
   },
   async ({ id, recurrence_freq, recurrence_interval, ...rest }) => {
     const payload: Record<string, unknown> = { ...rest };

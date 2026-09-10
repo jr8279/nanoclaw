@@ -1,8 +1,11 @@
-// Regression coverage for the UX-review findings that aren't reachable from
-// the backend test suite: the save-failure/dialog-discard bug, the
-// key-banner visibility bug, and the link-parser bogus-link bug. Uses jsdom
-// rather than a real browser — cheap, deterministic, and not subject to the
-// route-interception flakiness a full browser harness hit in CI sandboxes.
+// Regression coverage for UX findings not reachable from the backend test
+// suite: the save-failure/dialog-discard bug and the link-parser bogus-link
+// bug. Uses jsdom rather than a real browser — cheap, deterministic, and not
+// subject to the route-interception flakiness a full browser harness hit in
+// CI sandboxes. Auth/passkey ceremonies are mocked out (jsdom has no real
+// WebAuthn) — the app boots as an already-signed-in user so the rest of the
+// UI is testable; the actual ceremony is covered by src/auth.js's unit
+// tests plus manual verification.
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'fs';
@@ -12,6 +15,7 @@ import { JSDOM } from 'jsdom';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+const webauthnJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'webauthn.js'), 'utf8');
 const appJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
 
 let dom;
@@ -22,6 +26,23 @@ let fetchImpl;
 function flush() {
   // Let queued microtasks (the async submit handler's awaits) settle.
   return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/** boot() chains several sequential fetches (me -> users -> categories ->
+ * tasks) — one flush() tick isn't enough to drain all of them, so loop. */
+async function flushAll(times = 10) {
+  for (let i = 0; i < times; i++) await flush();
+}
+
+function defaultFetchImpl(url) {
+  const u = String(url);
+  let body = [];
+  if (u.includes('/api/auth/me')) {
+    body = { user: { id: 1, display_name: 'Test User', is_admin: true }, bootstrap_available: false };
+  }
+  return Promise.resolve(
+    new window.Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+  );
 }
 
 before(async () => {
@@ -35,40 +56,51 @@ before(async () => {
   window.HTMLDialogElement.prototype.close = function () {
     this.open = false;
   };
+  // jsdom doesn't implement the fetch API's Response class — borrow Node's
+  // built-in global, which is spec-compatible for our purposes here.
+  window.Response = Response;
   fetchCalls = [];
+  fetchImpl = defaultFetchImpl;
   window.fetch = (...args) => {
     fetchCalls.push(args);
     return fetchImpl(...args);
   };
   window.localStorage.clear();
+  window.eval(webauthnJs);
   window.eval(appJs);
-  await flush();
+  await flushAll();
 });
 
 beforeEach(() => {
   fetchCalls = [];
-  fetchImpl = async () => new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  fetchImpl = defaultFetchImpl;
 });
 
-function Response(body, init) {
-  return new window.Response(body, init);
-}
-
-test('key banner has hidden=true in markup', () => {
-  const banner = window.document.getElementById('keyBanner');
-  assert.equal(banner.hidden, true);
+test('a signed-in user sees the app, not the auth screen', () => {
+  assert.equal(window.document.getElementById('app').hidden, false);
+  assert.equal(window.document.getElementById('authScreen').hidden, true);
 });
 
-test('style.css gives [hidden] on .key-banner enough specificity to actually hide it', () => {
-  // The original bug: `.key-banner { display: flex }` (specificity 0,1,0)
-  // beat the UA `[hidden] { display: none }` rule (also 0,1,0, but earlier
-  // in the cascade), so the banner rendered even when the `hidden` attribute
-  // was set. A DOM-property check (`banner.hidden === true`) can't catch
-  // this — jsdom doesn't apply the cascade the way a real browser does — so
-  // assert directly on the stylesheet: an author rule scoped to
-  // `.key-banner[hidden]` (specificity 0,2,0) is required to win.
+test('#userMenu is nested inside its position:relative anchor, not a sibling of it', () => {
+  // Bug: #userMenu (position: absolute) originally sat outside
+  // .topbar-actions (its intended position: relative anchor) as a sibling
+  // instead of a child — with no positioned ancestor, its `top`/`right`
+  // resolved against the initial containing block instead of the button,
+  // so opening the menu rendered it off-screen even though `hidden` was
+  // correctly removed. Assert the containment structurally.
+  const topbarActions = window.document.querySelector('.topbar-actions');
+  const userMenu = window.document.getElementById('userMenu');
+  assert.ok(topbarActions.contains(userMenu), '#userMenu must be a descendant of .topbar-actions');
+});
+
+test('style.css gives [hidden] on .auth-screen enough specificity to actually hide it', () => {
+  // Same class of bug as the key-banner fix: `.auth-screen { display: flex }`
+  // (specificity 0,1,0) beats the UA `[hidden] { display: none }` rule
+  // unless an author rule scoped to `.auth-screen[hidden]` (0,2,0) is added —
+  // without it, the login/register screen stays visible, overlapping the
+  // app, even after boot() sets `authScreen.hidden = true`.
   const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'style.css'), 'utf8');
-  assert.match(css, /\.key-banner\[hidden\]\s*\{[^}]*display:\s*none/);
+  assert.match(css, /\.auth-screen\[hidden\]\s*\{[^}]*display:\s*none/);
 });
 
 test('save failure keeps the dialog open, preserves the typed title, and shows an error', async () => {
@@ -83,8 +115,7 @@ test('save failure keeps the dialog open, preserves the typed title, and shows a
   };
 
   window.document.getElementById('saveBtn').click();
-  await flush();
-  await flush();
+  await flushAll();
 
   const dialog = window.document.getElementById('taskDialog');
   assert.equal(dialog.open, true, 'dialog should stay open on a failed save');

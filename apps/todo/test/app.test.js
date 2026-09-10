@@ -12,12 +12,24 @@ process.env.TODO_DATA_DIR = dataDir;
 const { createApp } = await import('../src/app.js');
 const { db } = await import('../src/db.js');
 const { nextDueDate } = await import('../src/recurrence.js');
+const { createSession } = await import('../src/auth.js');
+
+const SERVICE_KEY = 'test-service-key';
 
 let server;
 let baseUrl;
+let primaryUserId;
+let primarySessionToken;
+
+function makeUser(displayName) {
+  const info = db
+    .prepare('INSERT INTO users (display_name, webauthn_user_id, created_at) VALUES (?, ?, ?)')
+    .run(displayName, `whid-${displayName}-${Math.random()}`, new Date().toISOString());
+  return info.lastInsertRowid;
+}
 
 before(async () => {
-  const app = createApp({ apiKey: '' });
+  const app = createApp({ apiKey: SERVICE_KEY });
   server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   baseUrl = `http://127.0.0.1:${server.address().port}`;
@@ -29,16 +41,26 @@ after(async () => {
 });
 
 beforeEach(() => {
-  db.exec('DELETE FROM links; DELETE FROM tasks; DELETE FROM categories;');
+  db.exec('DELETE FROM links; DELETE FROM tasks; DELETE FROM categories; DELETE FROM task_assignees; DELETE FROM sessions; DELETE FROM users;');
   const insert = db.prepare('INSERT INTO categories (id, name, color, created_at) VALUES (?, ?, ?, ?)');
   insert.run(1, 'Home', '#22c55e', new Date().toISOString());
   insert.run(2, 'Office', '#6366f1', new Date().toISOString());
+
+  // Most tests below act as a single signed-in user — this mirrors the app's
+  // real shape (every task op requires either a session or the service key)
+  // rather than special-casing the test suite as unauthenticated.
+  primaryUserId = makeUser('Primary Tester');
+  primarySessionToken = createSession(db, primaryUserId).token;
 });
 
 async function api(path, options = {}) {
   const res = await fetch(`${baseUrl}${path}`, {
     ...options,
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    headers: {
+      'Content-Type': 'application/json',
+      Cookie: `todo_session=${primarySessionToken}`,
+      ...(options.headers || {}),
+    },
   });
   const text = await res.text();
   let body;
@@ -252,4 +274,133 @@ test('duplicate category name returns 409', async () => {
     body: JSON.stringify({ name: 'Home' }),
   });
   assert.equal(status, 409);
+});
+
+// --- auth: no credential at all -----------------------------------------
+
+test('a request with no session and no service key is rejected', async () => {
+  const res = await fetch(`${baseUrl}/api/tasks`, { headers: { 'Content-Type': 'application/json' } });
+  assert.equal(res.status, 401);
+});
+
+test('the service key works without a session', async () => {
+  const res = await fetch(`${baseUrl}/api/categories`, {
+    headers: { 'Content-Type': 'application/json', 'X-API-Key': SERVICE_KEY },
+  });
+  assert.equal(res.status, 200);
+});
+
+test('a wrong service key is rejected', async () => {
+  const res = await fetch(`${baseUrl}/api/categories`, {
+    headers: { 'Content-Type': 'application/json', 'X-API-Key': 'wrong-key' },
+  });
+  assert.equal(res.status, 401);
+});
+
+// --- multi-user: ownership and visibility -----------------------------
+
+test("a task I create is owned by me and doesn't show on someone else's board", async () => {
+  const otherUserId = makeUser('Other Tester');
+  const otherToken = createSession(db, otherUserId).token;
+
+  const created = await api('/api/tasks', { method: 'POST', body: JSON.stringify({ title: 'My private task' }) });
+  assert.equal(created.body.owner_user_id, primaryUserId);
+
+  const otherList = await fetch(`${baseUrl}/api/tasks?status=all`, {
+    headers: { 'Content-Type': 'application/json', Cookie: `todo_session=${otherToken}` },
+  }).then((r) => r.json());
+  assert.ok(!otherList.some((t) => t.id === created.body.id));
+
+  const otherGet = await fetch(`${baseUrl}/api/tasks/${created.body.id}`, {
+    headers: { 'Content-Type': 'application/json', Cookie: `todo_session=${otherToken}` },
+  });
+  assert.equal(otherGet.status, 404, "someone else's task should 404, not leak that it exists");
+});
+
+test('a legacy task with no owner (NULL, pre-multi-user data) is visible to everyone', async () => {
+  const ts = new Date().toISOString();
+  const info = db
+    .prepare(
+      "INSERT INTO tasks (title, status, importance, owner_user_id, created_at, updated_at) VALUES ('Unclaimed', 'pending', 'medium', NULL, ?, ?)",
+    )
+    .run(ts, ts);
+  const otherUserId = makeUser('Other Tester');
+  const otherToken = createSession(db, otherUserId).token;
+  const res = await fetch(`${baseUrl}/api/tasks/${info.lastInsertRowid}`, {
+    headers: { 'Content-Type': 'application/json', Cookie: `todo_session=${otherToken}` },
+  });
+  assert.equal(res.status, 200);
+});
+
+test('assigning (@mentioning) another user puts the task on their board too, as the same record', async () => {
+  const otherUserId = makeUser('Other Tester');
+  const otherToken = createSession(db, otherUserId).token;
+
+  const created = await api('/api/tasks', {
+    method: 'POST',
+    body: JSON.stringify({ title: 'Shared chore', assignee_ids: [otherUserId] }),
+  });
+  assert.equal(created.body.assignees.length, 1);
+  assert.equal(created.body.assignees[0].id, otherUserId);
+
+  const otherList = await fetch(`${baseUrl}/api/tasks?status=all`, {
+    headers: { 'Content-Type': 'application/json', Cookie: `todo_session=${otherToken}` },
+  }).then((r) => r.json());
+  assert.ok(otherList.some((t) => t.id === created.body.id), 'assignee should see the task on their board');
+
+  // The assignee completing it is the *same* task, not a copy — the owner
+  // sees it as completed too.
+  await fetch(`${baseUrl}/api/tasks/${created.body.id}/complete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: `todo_session=${otherToken}` },
+  });
+  const ownerView = await api(`/api/tasks/${created.body.id}`);
+  assert.equal(ownerView.body.status, 'completed');
+});
+
+test('DELETE /api/tasks/:id/assignees/:userId un-tags without deleting the task', async () => {
+  const otherUserId = makeUser('Other Tester');
+  const created = await api('/api/tasks', {
+    method: 'POST',
+    body: JSON.stringify({ title: 'Task', assignee_ids: [otherUserId] }),
+  });
+  const { body } = await api(`/api/tasks/${created.body.id}/assignees/${otherUserId}`, { method: 'DELETE' });
+  assert.equal(body.assignees.length, 0);
+});
+
+// --- multi-user: the service credential must say whose board a task is for --
+
+test('the service key creating a task without owner_id is rejected', async () => {
+  const res = await fetch(`${baseUrl}/api/tasks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-API-Key': SERVICE_KEY },
+    body: JSON.stringify({ title: 'Whose task is this?' }),
+  });
+  assert.equal(res.status, 400);
+});
+
+test('the service key creating a task with a valid owner_id works and is unscoped on read', async () => {
+  const createRes = await fetch(`${baseUrl}/api/tasks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-API-Key': SERVICE_KEY },
+    body: JSON.stringify({ title: 'For Primary Tester', owner_id: primaryUserId }),
+  });
+  assert.equal(createRes.status, 201);
+  const created = await createRes.json();
+  assert.equal(created.owner_user_id, primaryUserId);
+
+  // Service reads aren't scoped to any one person by default.
+  const listRes = await fetch(`${baseUrl}/api/tasks?status=all`, {
+    headers: { 'Content-Type': 'application/json', 'X-API-Key': SERVICE_KEY },
+  });
+  const list = await listRes.json();
+  assert.ok(list.some((t) => t.id === created.id));
+});
+
+test('GET /api/users lists household members for @mention autocomplete', async () => {
+  makeUser('Second Person');
+  const { status, body } = await api('/api/users');
+  assert.equal(status, 200);
+  assert.ok(body.length >= 2);
+  assert.ok(body.every((u) => 'display_name' in u && !('webauthn_user_id' in u)));
 });

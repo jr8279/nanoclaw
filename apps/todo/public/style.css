@@ -101,6 +101,37 @@ body {
   letter-spacing: -0.01em;
 }
 .topbar .today { font-size: 0.8rem; color: var(--ink-soft); }
+.topbar-actions { display: flex; gap: 8px; padding-bottom: 12px; position: relative; }
+#userMenuBtn::before { content: '\25CF'; font-size: 0.7em; vertical-align: 1px; }
+
+.user-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  box-shadow: 0 4px 14px rgba(20, 20, 16, 0.18);
+  min-width: 220px;
+  z-index: 8;
+  padding: 6px;
+}
+.user-menu-name { font-weight: 600; padding: 8px 10px 4px; font-size: 0.85rem; }
+.menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.menu-item:hover { background: var(--paper-2); }
+.menu-item[hidden] { display: none; }
 
 .btn {
   border: 1px solid var(--ink);
@@ -238,6 +269,8 @@ body {
 .task-meta .flag.urgent { color: var(--rust); }
 .task-meta .flag.high { color: var(--ochre); }
 .task-meta .recur::before { content: '↻ '; }
+.task-meta .from::before { content: 'from '; }
+.task-meta .tagged::before { content: '→ '; }
 
 .task-notes {
   font-size: 0.85rem;
@@ -308,33 +341,86 @@ dialog input:focus, dialog select:focus, dialog textarea:focus { border-color: v
   margin: 0 0 8px;
 }
 
-/* --- key banner ---------------------------------------------------------- */
+/* --- assignee picker ------------------------------------------------------ */
 
-.key-banner {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: var(--ink);
-  color: var(--paper);
-  padding: 10px 20px calc(10px + env(safe-area-inset-bottom));
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  font-size: 0.85rem;
-  z-index: 10;
+.assignee-picker { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
+.assignee-pill {
+  border: 1px solid var(--rule);
+  background: var(--paper-2);
+  color: var(--ink-soft);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 0.8rem;
+  font-family: inherit;
+  cursor: pointer;
 }
-.key-banner[hidden] { display: none; }
-.key-banner input {
+.assignee-pill.active { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.assignee-picker .empty-note { font-size: 0.8rem; color: var(--ink-faint); font-style: italic; }
+
+/* --- invite dialog --------------------------------------------------------- */
+
+.dialog-help { font-size: 0.85rem; color: var(--ink-soft); margin: 0 0 14px; }
+.invite-link-row { display: flex; gap: 8px; margin-bottom: 4px; }
+.invite-link-row input {
   flex: 1;
-  min-width: 120px;
-  padding: 6px 8px;
+  background: var(--paper-2);
+  border: 1px solid var(--rule);
   border-radius: 3px;
-  border: 1px solid var(--ink-soft);
-  background: var(--paper);
+  padding: 9px 10px;
+  font-size: 0.85rem;
   color: var(--ink);
   font-family: inherit;
 }
-.key-banner .btn { border-color: var(--paper); color: var(--paper); margin-bottom: 0; }
-.key-banner .key-error { color: var(--rust); background: var(--paper); width: 100%; font-size: 0.8rem; margin: 0; padding: 4px 8px; border-radius: 3px; }
+
+/* --- auth screen (login / registration / invite redemption) -------------- */
+
+.auth-screen {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--paper);
+}
+/* [class]{display:flex} beats the UA [hidden]{display:none} rule on
+   specificity ties broken by cascade order — a scoped override is needed,
+   same fix as the key-banner bug earlier in this app's history. */
+.auth-screen[hidden] { display: none; }
+.auth-card { width: min(360px, 100%); text-align: center; }
+.auth-card h1 {
+  font-family: 'Fraunces', Georgia, serif;
+  font-weight: 600;
+  font-size: 2.2rem;
+  margin: 0 0 22px;
+}
+.auth-card p.lead { color: var(--ink-soft); font-size: 0.9rem; margin: 0 0 20px; }
+.auth-card label {
+  display: block;
+  text-align: left;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  margin-bottom: 16px;
+}
+.auth-card input {
+  width: 100%;
+  margin-top: 5px;
+  background: var(--paper-2);
+  border: 1px solid var(--rule);
+  color: var(--ink);
+  border-radius: 3px;
+  padding: 10px;
+  font-size: 1rem;
+  font-family: inherit;
+}
+.auth-card .btn { width: 100%; padding: 11px; font-size: 0.9rem; }
+.auth-card .switch {
+  margin-top: 18px;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  background: none;
+  border: none;
+  text-decoration: underline;
+  cursor: pointer;
+  font-family: inherit;
+}

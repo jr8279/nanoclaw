@@ -19,13 +19,30 @@
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
-  <div id="app">
+  <div id="authScreen" class="auth-screen" hidden>
+    <div class="auth-card">
+      <h1>Todo</h1>
+      <div id="authBody"></div>
+      <p id="authError" class="form-error" hidden></p>
+    </div>
+  </div>
+
+  <div id="app" hidden>
     <header class="topbar">
       <div class="topbar-heading">
         <h1>Todo</h1>
         <span class="today" id="todayLabel"></span>
       </div>
-      <button id="addBtn" class="btn primary">Add task</button>
+      <div class="topbar-actions">
+        <button id="addBtn" class="btn primary">Add task</button>
+        <button id="userMenuBtn" class="btn" aria-haspopup="true" aria-expanded="false"></button>
+        <div id="userMenu" class="user-menu" hidden>
+          <div class="user-menu-name" id="userMenuName"></div>
+          <button id="addDeviceBtn" class="menu-item">Add a passkey on this device</button>
+          <button id="inviteBtn" class="menu-item" hidden>Invite someone</button>
+          <button id="signOutBtn" class="menu-item">Sign out</button>
+        </div>
+      </div>
     </header>
 
     <nav class="filters">
@@ -38,13 +55,6 @@
     </nav>
 
     <main id="taskList" class="task-list"></main>
-
-    <div id="keyBanner" class="key-banner" hidden>
-      <span>This server requires a key to make changes.</span>
-      <input id="keyInput" type="password" placeholder="API key" />
-      <button id="keySave" class="btn">Save</button>
-      <p id="keyError" class="key-error" hidden></p>
-    </div>
   </div>
 
   <dialog id="taskDialog">
@@ -93,6 +103,10 @@
         <textarea id="fLinks" rows="2" placeholder="School portal https://example.com"></textarea>
       </label>
 
+      <label>Tag someone (puts it on their board too)
+        <div id="fAssignees" class="assignee-picker"></div>
+      </label>
+
       <p id="formError" class="form-error" hidden></p>
 
       <div class="dialog-actions">
@@ -103,6 +117,19 @@
     </form>
   </dialog>
 
+  <dialog id="inviteDialog">
+    <h2>Invite someone</h2>
+    <p class="dialog-help">Share this link — it works once and expires in 3 days.</p>
+    <div class="invite-link-row">
+      <input id="inviteLinkOutput" readonly />
+      <button id="inviteCopyBtn" class="btn" type="button">Copy</button>
+    </div>
+    <div class="dialog-actions">
+      <button id="inviteCloseBtn" class="btn primary" type="button">Done</button>
+    </div>
+  </dialog>
+
+  <script src="/webauthn.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>
