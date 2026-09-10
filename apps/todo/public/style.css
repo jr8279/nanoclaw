@@ -63,7 +63,27 @@ body {
   font-size: 15px;
   line-height: 1.45;
   padding-bottom: env(safe-area-inset-bottom);
+  position: relative;
 }
+
+/* A faint paper grain instead of a flat fill — the one texture cue in this
+   design, kept subtle enough to read as material rather than decoration. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.05;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) body::before { mix-blend-mode: overlay; opacity: 0.06; }
+}
+:root[data-theme='dark'] body::before { mix-blend-mode: overlay; opacity: 0.06; }
+
+#authScreen, #app { position: relative; z-index: 1; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
@@ -143,12 +163,42 @@ body {
   font-family: inherit;
   cursor: pointer;
   margin-bottom: 12px;
+  transition: transform 0.1s ease, background 0.12s ease, box-shadow 0.12s ease;
 }
 .btn:hover { background: var(--paper-2); }
+.btn:active { transform: scale(0.96); }
 .btn.primary { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 .btn.primary:hover { background: var(--accent); border-color: var(--accent); }
 .btn.danger { border-color: var(--rust); color: var(--rust); }
 .btn.danger:hover { background: var(--rust); color: var(--paper); }
+
+/* --- floating action button ---------------------------------------------
+   The one place elevation/shadow is spent in this design (see the brief's
+   "spend your boldness in one place") — everywhere else stays flat. */
+.fab {
+  position: fixed;
+  right: max(24px, calc(50vw - 320px + 24px));
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  background: var(--ink);
+  color: var(--paper);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(20, 20, 16, 0.28), 0 2px 4px rgba(20, 20, 16, 0.22);
+  z-index: 7;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+.fab:hover { background: var(--accent); }
+.fab:active {
+  transform: scale(0.92);
+  box-shadow: 0 2px 6px rgba(20, 20, 16, 0.24);
+}
+.fab svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 
 /* --- filters: literal folder tabs, not pill chips -------------------- */
 
@@ -165,8 +215,10 @@ body {
   cursor: pointer;
   clip-path: polygon(8% 0, 92% 0, 100% 100%, 0% 100%);
   margin-bottom: -1px;
+  transition: transform 0.1s ease, background 0.12s ease, color 0.12s ease;
 }
 .tab.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.tab:active { transform: scale(0.96); }
 .status-row { display: flex; gap: 16px; border-bottom: 1px solid var(--rule); padding-bottom: 8px; }
 .status-tab {
   border: none;
@@ -177,6 +229,7 @@ body {
   cursor: pointer;
   padding: 2px 0;
   position: relative;
+  transition: color 0.15s ease;
 }
 .status-tab.active { color: var(--ink); font-weight: 600; }
 .status-tab.active::after {
@@ -185,11 +238,16 @@ body {
   left: 0; right: 0; bottom: -9px;
   height: 2px;
   background: var(--ink);
+  animation: underline-in 0.18s ease;
+}
+@keyframes underline-in {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
 }
 
 /* --- task list: ruled rows, not boxed cards -------------------------- */
 
-.task-list { display: flex; flex-direction: column; }
+.task-list { display: flex; flex-direction: column; padding-bottom: 76px; }
 
 .task-row {
   border-bottom: 1px solid var(--rule);
@@ -221,6 +279,7 @@ body {
   align-items: center;
   justify-content: center;
 }
+.check:active .check-box { transform: scale(0.88); }
 .check-box {
   width: 19px;
   height: 19px;
@@ -229,6 +288,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: transform 0.1s ease;
 }
 .check-box svg { width: 13px; height: 13px; overflow: visible; }
 .check-box path {
@@ -311,8 +371,25 @@ dialog {
   width: min(480px, 92vw);
   max-height: 85vh;
   overflow-y: auto;
+  box-shadow: 0 16px 40px rgba(20, 20, 16, 0.28);
+  /* One dialog, one moment: a brief settle-in rather than an instant pop.
+     @starting-style is progressive enhancement — browsers without it just
+     get the old instant open, no functional loss. */
+  transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.2, 0.8, 0.3, 1), overlay 0.18s allow-discrete, display 0.18s allow-discrete;
+  opacity: 1;
+  transform: translateY(0) scale(1);
 }
-dialog::backdrop { background: rgba(20, 20, 16, 0.45); }
+@starting-style {
+  dialog[open] { opacity: 0; transform: translateY(10px) scale(0.98); }
+}
+dialog::backdrop {
+  background: rgba(20, 20, 16, 0.45);
+  transition: opacity 0.18s ease, overlay 0.18s allow-discrete, display 0.18s allow-discrete;
+  opacity: 1;
+}
+@starting-style {
+  dialog[open]::backdrop { opacity: 0; }
+}
 dialog h2 {
   font-family: 'Fraunces', Georgia, serif;
   font-weight: 600;
@@ -353,8 +430,10 @@ dialog input:focus, dialog select:focus, dialog textarea:focus { border-color: v
   font-size: 0.8rem;
   font-family: inherit;
   cursor: pointer;
+  transition: transform 0.1s ease, background 0.12s ease, color 0.12s ease;
 }
 .assignee-pill.active { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.assignee-pill:active { transform: scale(0.94); }
 .assignee-picker .empty-note { font-size: 0.8rem; color: var(--ink-faint); font-style: italic; }
 
 /* --- invite dialog --------------------------------------------------------- */

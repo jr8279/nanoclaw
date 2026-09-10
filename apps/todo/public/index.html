@@ -34,7 +34,6 @@
         <span class="today" id="todayLabel"></span>
       </div>
       <div class="topbar-actions">
-        <button id="addBtn" class="btn primary">Add task</button>
         <button id="userMenuBtn" class="btn" aria-haspopup="true" aria-expanded="false"></button>
         <div id="userMenu" class="user-menu" hidden>
           <div class="user-menu-name" id="userMenuName"></div>
@@ -55,6 +54,10 @@
     </nav>
 
     <main id="taskList" class="task-list"></main>
+
+    <button id="addBtn" class="fab" aria-label="Add task">
+      <svg viewBox="0 0 24 24" width="24" height="24"><path d="M12 5v14M5 12h14" /></svg>
+    </button>
   </div>
 
   <dialog id="taskDialog">
