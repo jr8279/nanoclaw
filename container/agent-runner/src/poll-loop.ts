@@ -25,6 +25,7 @@ import {
   type RoutingContext,
 } from './formatter.js';
 import { isUploadTraceCommand, uploadTrace } from './upload-trace.js';
+import { extractImageBlocks } from './image-attachments.js';
 import type { AgentProvider, AgentQuery, ProviderEvent, ProviderExchange } from './providers/types.js';
 
 const POLL_INTERVAL_MS = 1000;
@@ -234,10 +235,17 @@ export async function runPollLoop(config: PollLoopConfig): Promise<void> {
     // provider natively handles slash commands), others get XML.
     const prompt = formatMessagesWithCommands(keep, config.provider.supportsNativeSlashCommands);
 
+    // Images the batch's attachments already staged to disk, as native
+    // content blocks — providers that can't use them (Codex/OpenCode) get
+    // just the string prompt, which still carries the file-path annotation
+    // formatter.ts wrote for every attachment, image or not.
+    const imageBlocks = extractImageBlocks(keep);
+    const providerPrompt = imageBlocks.length > 0 ? [...imageBlocks, { type: 'text' as const, text: prompt }] : prompt;
+
     log(`Processing ${keep.length} message(s), kinds: ${[...new Set(keep.map((m) => m.kind))].join(',')}`);
 
     const query = config.provider.query({
-      prompt,
+      prompt: providerPrompt,
       continuation,
       cwd: config.cwd,
       systemContext: config.systemContext,

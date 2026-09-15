@@ -78,9 +78,24 @@ export interface ProviderOptions {
   effort?: string;
 }
 
+/**
+ * A piece of a multimodal prompt. Providers that support native image
+ * content blocks (Claude) turn these into the SDK's content-block shape;
+ * providers that don't (Codex, OpenCode) should flatten `text` parts and
+ * drop `image` parts (the image bytes are already saved to disk and
+ * referenced by path in the text, per formatter.ts's attachment handling).
+ */
+export type PromptContent =
+  | { type: 'text'; text: string }
+  | { type: 'image'; mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'; data: string };
+
 export interface QueryInput {
-  /** Initial prompt (already formatted by agent-runner). */
-  prompt: string;
+  /**
+   * Initial prompt (already formatted by agent-runner). A plain string in
+   * the common case; an array of parts when the batch includes image
+   * attachments the provider can see natively.
+   */
+  prompt: string | PromptContent[];
 
   /**
    * Opaque continuation token from a previous query. The provider decides

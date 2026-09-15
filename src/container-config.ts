@@ -45,6 +45,8 @@ export interface ContainerConfig {
   model?: string;
   effort?: string;
   timezone?: string;
+  /** Extra Docker networks to connect the container to, beyond its default network. */
+  extraNetworks: string[];
 }
 
 /**
@@ -77,6 +79,7 @@ export function configFromDb(row: ContainerConfigRow, group: AgentGroup): Contai
     model: row.model ?? undefined,
     effort: row.effort ?? undefined,
     timezone: row.timezone && isValidTimezone(row.timezone) ? row.timezone : undefined,
+    extraNetworks: JSON.parse(row.extra_networks) as string[],
   };
 }
 

@@ -2,6 +2,10 @@ import { registerProvider } from './provider-registry.js';
 import type { MemorySessionHookRegistration } from '../memory/session-hook.js';
 import type { AgentProvider, AgentQuery, ProviderEvent, ProviderOptions, QueryInput } from './types.js';
 
+function promptToText(prompt: QueryInput['prompt']): string {
+  return typeof prompt === 'string' ? prompt : prompt.map((p) => (p.type === 'text' ? p.text : '[image]')).join(' ');
+}
+
 /**
  * Mock provider for testing. Returns canned responses.
  * Supports push() — queued messages produce additional results.
@@ -35,7 +39,7 @@ export class MockProvider implements AgentProvider {
 
         // Process initial prompt
         yield { type: 'activity' };
-        yield { type: 'result', text: responseFactory(input.prompt) };
+        yield { type: 'result', text: responseFactory(promptToText(input.prompt)) };
 
         // Process any pushed follow-ups
         while (!ended && !aborted) {

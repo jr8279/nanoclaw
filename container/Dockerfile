@@ -63,11 +63,16 @@ ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 # ---- Bun runtime -------------------------------------------------------------
-# Install via the official script (handles multi-arch detection), then move
-# the binary to /usr/local/bin so the non-root `node` user can execute it.
-RUN curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}" && \
-    install -m 0755 /root/.bun/bin/bun /usr/local/bin/bun && \
-    rm -rf /root/.bun
+# Fetch the "baseline" build explicitly rather than using the official
+# install script's CPU auto-detection: that script inspects the CPU of the
+# machine running the build, not the machine that will run the container, so
+# a build host with AVX2 silently bakes in a binary that SIGILLs (exit 132)
+# on older hosts (e.g. pre-Haswell Xeons) lacking AVX2.
+RUN curl -fsSL -o /tmp/bun.zip \
+      "https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-linux-x64-baseline.zip" && \
+    unzip -q /tmp/bun.zip -d /tmp/bun-extract && \
+    install -m 0755 /tmp/bun-extract/bun-linux-x64-baseline/bun /usr/local/bin/bun && \
+    rm -rf /tmp/bun.zip /tmp/bun-extract
 
 # ---- agent-runner deps -------------------------------------------------------
 # Deps are cached independently of CLI versions. Source is NOT baked in —
@@ -105,6 +110,11 @@ RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
 COPY cli-tools.json install-cli-tools.sh /tmp/
 RUN --mount=type=cache,target=/root/.cache/pnpm \
     sh /tmp/install-cli-tools.sh /tmp/cli-tools.json
+
+# ---- Google Calendar MCP (add-gcal-tool) --------------------------------------
+ARG CALENDAR_MCP_VERSION=2.6.1
+RUN --mount=type=cache,target=/root/.cache/pnpm \
+    pnpm install -g "@cocal/google-calendar-mcp@${CALENDAR_MCP_VERSION}"
 
 # ---- ncl CLI wrapper ----------------------------------------------------------
 # Actual script lives in the mounted source at /app/src/cli/ncl.ts.

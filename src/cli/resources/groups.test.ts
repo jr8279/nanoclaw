@@ -259,3 +259,41 @@ describe('groups config add-mount / remove-mount (host-only)', () => {
     expect(JSON.parse(getContainerConfig(GID)!.additional_mounts)).toEqual([]);
   });
 });
+
+describe('groups config add-network / remove-network (host-only)', () => {
+  beforeEach(() => {
+    if (fs.existsSync(TEST_DIR)) fs.rmSync(TEST_DIR, { recursive: true });
+    fs.mkdirSync(TEST_DIR, { recursive: true });
+    runMigrations(initTestDb());
+  });
+  afterEach(() => {
+    closeDb();
+    if (fs.existsSync(TEST_DIR)) fs.rmSync(TEST_DIR, { recursive: true });
+  });
+
+  it('adds a network idempotently and removes it (host caller)', async () => {
+    const GID = 'ag-network';
+    createAgentGroup({ id: GID, name: 'n', folder: 'n', agent_provider: null, created_at: now() });
+    ensureContainerConfig(GID);
+    const args = { id: GID, network: 'cloud_default' };
+
+    const add = await dispatch({ id: 'r1', command: 'groups-config-add-network', args }, { caller: 'host' });
+    expect(add.ok).toBe(true);
+    expect(JSON.parse(getContainerConfig(GID)!.extra_networks)).toEqual(['cloud_default']);
+
+    // idempotent: a second add does not duplicate
+    await dispatch({ id: 'r2', command: 'groups-config-add-network', args }, { caller: 'host' });
+    expect(JSON.parse(getContainerConfig(GID)!.extra_networks)).toHaveLength(1);
+
+    const rm = await dispatch(
+      {
+        id: 'r3',
+        command: 'groups-config-remove-network',
+        args: { id: GID, network: 'cloud_default' },
+      },
+      { caller: 'host' },
+    );
+    expect(rm.ok).toBe(true);
+    expect(JSON.parse(getContainerConfig(GID)!.extra_networks)).toEqual([]);
+  });
+});

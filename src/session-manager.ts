@@ -15,7 +15,7 @@ import fs from 'fs';
 import path from 'path';
 
 import { deriveAttachmentName } from './attachment-naming.js';
-import { isSafeAttachmentName } from './attachment-safety.js';
+import { isSafeAttachmentName, isSafeAttachmentPath } from './attachment-safety.js';
 import type { OutboundFile } from './channels/adapter.js';
 import { DATA_DIR } from './config.js';
 import { ensureContainedInboxDir, isPathInside } from './inbox-safety.js';
@@ -310,7 +310,7 @@ function extractAttachmentFiles(
   const attachments = parsed.attachments as Array<Record<string, unknown>> | undefined;
   if (!Array.isArray(attachments)) return contentStr;
 
-  if (!isSafeAttachmentName(messageId)) {
+  if (!isSafeAttachmentPath(messageId)) {
     log.warn('Rejecting unsafe inbound message id', { messageId });
     return contentStr;
   }

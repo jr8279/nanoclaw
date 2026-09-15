@@ -1,0 +1,9 @@
+[Unit]
+Description=NanoClaw agent state backup
+After=network-online.target
+
+[Service]
+Type=oneshot
+Environment=NANOCLAW_DIR=/home/docker/nanoclaw
+Environment=NANOCLAW_BACKUP_DIR=/home/docker/nanoclaw-backup
+ExecStart=/home/docker/nanoclaw/scripts/backup-agents.sh

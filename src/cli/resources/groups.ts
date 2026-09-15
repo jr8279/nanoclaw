@@ -53,6 +53,7 @@ function presentConfig(row: ContainerConfigRow): Record<string, unknown> {
     additional_mounts: JSON.parse(row.additional_mounts),
     cli_scope: row.cli_scope,
     timezone: row.timezone,
+    extra_networks: JSON.parse(row.extra_networks),
     updated_at: row.updated_at,
   };
 }
@@ -496,6 +497,54 @@ registerResource({
         const filtered = existing.filter((m) => !(m.hostPath === hostPath && m.containerPath === containerPath));
         updateContainerConfigJson(id, 'additional_mounts', filtered);
         return { removed: { hostPath, containerPath }, note: `Run \`ncl groups restart --id ${id}\` to apply.` };
+      },
+    },
+    'config add-network': {
+      access: 'approval',
+      hostOnly: true,
+      description:
+        "Connect a group's containers to an additional Docker network (beyond its default network), " +
+        'so the agent can reach sibling containers by name (e.g. a todo app on a compose network) ' +
+        'instead of going out and back through a public tunnel. OPERATOR-ONLY — network access is a ' +
+        'trust-boundary decision like a host mount. Applied on every spawn/restart via `docker network ' +
+        'connect`; requires `ncl groups restart` to take effect on a running container. Use --id ' +
+        '<group-id> --network <docker-network-name>.',
+      handler: async (args) => {
+        const id = args.id as string;
+        if (!id) throw new Error('--id is required');
+        const network = args.network as string | undefined;
+        if (!network) throw new Error('Provide --network <docker-network-name>');
+
+        const row = getContainerConfig(id);
+        if (!row) throw new Error(`No container config for group: ${id}`);
+
+        const existing = JSON.parse(row.extra_networks) as string[];
+        if (!existing.includes(network)) {
+          existing.push(network);
+          updateContainerConfigJson(id, 'extra_networks', existing);
+        }
+        return { added: network, note: `Run \`ncl groups restart --id ${id}\` for the network to take effect.` };
+      },
+    },
+    'config remove-network': {
+      access: 'approval',
+      hostOnly: true,
+      description:
+        "Disconnect a group's containers from an extra Docker network. OPERATOR-ONLY. Requires " +
+        '`ncl groups restart` to take effect. Use --id <group-id> --network <docker-network-name>.',
+      handler: async (args) => {
+        const id = args.id as string;
+        if (!id) throw new Error('--id is required');
+        const network = args.network as string | undefined;
+        if (!network) throw new Error('Provide --network <docker-network-name>');
+
+        const row = getContainerConfig(id);
+        if (!row) throw new Error(`No container config for group: ${id}`);
+
+        const existing = JSON.parse(row.extra_networks) as string[];
+        const filtered = existing.filter((n) => n !== network);
+        updateContainerConfigJson(id, 'extra_networks', filtered);
+        return { removed: network, note: `Run \`ncl groups restart --id ${id}\` to apply.` };
       },
     },
   },

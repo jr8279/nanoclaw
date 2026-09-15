@@ -12,6 +12,7 @@ import type {
   AgentProvider,
   AgentQuery,
   McpServerConfig,
+  PromptContent,
   ProviderEvent,
   ProviderOptions,
   QueryInput,
@@ -132,11 +133,30 @@ function mcpAllowPattern(serverName: string): string {
   return `mcp__${serverName.replace(/[^a-zA-Z0-9_-]/g, '_')}__*`;
 }
 
+type SDKUserMessageContent =
+  | string
+  | Array<
+      | { type: 'text'; text: string }
+      | {
+          type: 'image';
+          source: { type: 'base64'; media_type: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'; data: string };
+        }
+    >;
+
 interface SDKUserMessage {
   type: 'user';
-  message: { role: 'user'; content: string };
+  message: { role: 'user'; content: SDKUserMessageContent };
   parent_tool_use_id: null;
   session_id: string;
+}
+
+/** Convert agent-runner's provider-agnostic prompt parts to Anthropic content blocks. */
+function toSdkContent(parts: PromptContent[]): SDKUserMessageContent {
+  return parts.map((p) =>
+    p.type === 'text'
+      ? { type: 'text' as const, text: p.text }
+      : { type: 'image' as const, source: { type: 'base64' as const, media_type: p.mediaType, data: p.data } },
+  );
 }
 
 /**
@@ -147,10 +167,11 @@ class MessageStream {
   private waiting: (() => void) | null = null;
   private done = false;
 
-  push(text: string): void {
+  push(input: string | PromptContent[]): void {
+    const content = typeof input === 'string' ? input : toSdkContent(input);
     this.queue.push({
       type: 'user',
-      message: { role: 'user', content: text },
+      message: { role: 'user', content },
       parent_tool_use_id: null,
       session_id: '',
     });

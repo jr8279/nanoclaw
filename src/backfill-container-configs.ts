@@ -20,6 +20,7 @@ interface LegacyContainerJson {
   packages?: { apt?: string[]; npm?: string[] };
   imageTag?: string;
   additionalMounts?: AdditionalMountConfig[];
+  extraNetworks?: string[];
   skills?: string[] | 'all';
   provider?: string;
   assistantName?: string;
@@ -66,6 +67,7 @@ export function backfillContainerConfigs(): void {
       additional_mounts: JSON.stringify(legacy.additionalMounts ?? []),
       cli_scope: 'group',
       timezone: null,
+      extra_networks: JSON.stringify(legacy.extraNetworks ?? []),
       updated_at: new Date().toISOString(),
     };
 

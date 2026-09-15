@@ -101,3 +101,49 @@ describe('extractAttachmentFiles — inbox-root symlink containment (#2828 sibli
     expect(fs.readdirSync(canaryDir)).toHaveLength(0);
   });
 });
+
+describe('extractAttachmentFiles — slash-namespaced message ids (Photon `p:0/spc-msg-...`)', () => {
+  it('extracts the attachment when the message id contains a slash', () => {
+    const messageId = 'p:0/spc-msg-d9efce39-7c6a-45cd-8f71-d09e4a95be9c';
+    const content = JSON.stringify({
+      text: 'photo',
+      attachments: [{ name: 'photo.jpg', mimeType: 'image/jpeg', data: Buffer.from('bytes').toString('base64') }],
+    });
+
+    writeSessionMessage(AG, SESS, {
+      id: messageId,
+      kind: 'chat',
+      timestamp: now(),
+      platformId: 'imessage:123',
+      channelType: 'imessage',
+      threadId: null,
+      content,
+    });
+
+    const written = path.join(sessionDir(AG, SESS), 'inbox', messageId, 'photo.jpg');
+    expect(fs.existsSync(written)).toBe(true);
+    expect(fs.readFileSync(written, 'utf-8')).toBe('bytes');
+  });
+
+  it('still refuses a `..` segment smuggled alongside a slash', () => {
+    const inboxRoot = path.join(sessionDir(AG, SESS), 'inbox');
+    const messageId = 'p:0/../escape-attempt';
+    const content = JSON.stringify({
+      text: 'photo',
+      attachments: [{ name: 'pwn.jpg', data: Buffer.from('attacker-bytes').toString('base64') }],
+    });
+
+    writeSessionMessage(AG, SESS, {
+      id: messageId,
+      kind: 'chat',
+      timestamp: now(),
+      platformId: 'imessage:123',
+      channelType: 'imessage',
+      threadId: null,
+      content,
+    });
+
+    // Rejected at the id-safety check, before any directory is touched.
+    expect(fs.existsSync(inboxRoot) ? fs.readdirSync(inboxRoot) : []).toHaveLength(0);
+  });
+});
