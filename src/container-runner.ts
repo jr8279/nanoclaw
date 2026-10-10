@@ -472,7 +472,7 @@ async function spawnContainer(session: Session): Promise<void> {
     },
     afterStart: () => {
       if (containerConfig.extraNetworks.length > 0) {
-        void connectExtraNetworks(containerName, containerConfig.extraNetworks);
+        void connectExtraNetworks(handle.name, containerConfig.extraNetworks);
       }
       return markContainerRunning(session.id);
     },
