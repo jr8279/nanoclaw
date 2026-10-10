@@ -76,6 +76,8 @@ export interface PollLoopConfig {
   systemContext?: {
     instructions?: string;
   };
+  /** One-shot note prepended to the first chat prompt (e.g. a model reset notice). */
+  startupNotice?: string;
   /**
    * Optional stop signal. In production the loop runs until the container
    * dies; tests pass a signal so an abandoned loop actually exits instead of
@@ -123,6 +125,7 @@ export async function runPollLoop(config: PollLoopConfig): Promise<void> {
   // This lets the new container re-process those messages.
   clearStaleProcessingAcks();
 
+  let startupNotice = config.startupNotice;
   let pollCount = 0;
   let isFirstPoll = true;
   while (true) {
@@ -234,7 +237,11 @@ export async function runPollLoop(config: PollLoopConfig): Promise<void> {
 
     // Format messages: passthrough commands get raw text (only if the
     // provider natively handles slash commands), others get XML.
-    const prompt = formatMessagesWithCommands(keep, config.provider.supportsNativeSlashCommands);
+    let prompt = formatMessagesWithCommands(keep, config.provider.supportsNativeSlashCommands);
+    if (startupNotice && keep.some((m) => m.kind === 'chat' || m.kind === 'chat-sdk')) {
+      prompt = `${startupNotice}\n\n${prompt}`;
+      startupNotice = undefined;
+    }
 
     // Images the batch's attachments already staged to disk, as native
     // content blocks — providers that can't use them (Codex/OpenCode) get

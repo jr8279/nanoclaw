@@ -21,6 +21,7 @@
  *   /home/node/.claude/ ← Claude SDK state + skill symlinks (RW)
  */
 
+import { clearModelOverride, readModelOverride } from './model-override.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -107,7 +108,22 @@ async function main(): Promise<void> {
   });
   provider.registerMemorySessionHook(MEMORY_SESSION_HOOK);
 
+  // A model chosen via switch_model only lasts while the container is up.
+  // On a fresh container, revert to the configured default and have the
+  // agent tell the user, so they know the switch no longer applies.
+  let startupNotice: string | undefined;
+  const staleModel = readModelOverride();
+  if (staleModel) {
+    clearModelOverride();
+    const defaultModel = config.model || 'the default model';
+    startupNotice =
+      `[System notice: this session was on model ${staleModel}, but it went idle and was reset to the default (${defaultModel}). ` +
+      `Mention this briefly at the start of your next reply, e.g. "Heads up, I switched back from ${staleModel} to ${defaultModel} after sitting idle."]`;
+    log(`Cleared stale model override ${staleModel} → ${defaultModel}`);
+  }
+
   await runPollLoop({
+    startupNotice,
     provider,
     providerName,
     cwd: CWD,
