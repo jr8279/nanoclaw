@@ -102,7 +102,7 @@ describe('voice adapter', () => {
     await adapter.deliver('default', null, { kind: 'chat', content: { text: 'You have **two** things today.' } });
     const res = await pending;
     expect(res.status).toBe(200);
-    expect(res.data).toEqual({ reply: 'You have two things today.', more: false });
+    expect(res.data).toEqual({ reply: 'You have two things today.', more: false, status: 'done' });
   });
 
   it('joins messages that arrive close together', async () => {
@@ -110,27 +110,28 @@ describe('voice adapter', () => {
     await vi.waitFor(() => expect(setup.onInbound).toHaveBeenCalled());
     await adapter.deliver('default', null, { kind: 'chat', content: 'First.' });
     await adapter.deliver('default', null, { kind: 'chat', content: 'Second.' });
-    expect((await pending).data).toEqual({ reply: 'First. Second.', more: false });
+    expect((await pending).data).toEqual({ reply: 'First. Second.', more: false, status: 'done' });
   });
 
   it('answers with a filler when the agent is slow, then /api/wait gets the reply', async () => {
     const turn = await req(port, 'POST', '/api/turn', '{"text":"check my email"}', AUTH);
-    expect(turn.data).toEqual({ reply: 'One moment.', more: true });
+    expect(turn.data).toEqual({ reply: 'One moment.', more: true, status: 'working' });
 
     const waiting = req(port, 'GET', '/api/wait', undefined, AUTH);
     await adapter.deliver('default', null, { kind: 'chat', content: 'Nothing urgent.' });
-    expect((await waiting).data).toEqual({ reply: 'Nothing urgent.', more: false });
+    expect((await waiting).data).toEqual({ reply: 'Nothing urgent.', more: false, status: 'done' });
 
     expect((await req(port, 'GET', '/api/wait', undefined, AUTH)).data).toEqual({
       reply: 'Still working on it.',
       more: true,
+      status: 'working',
     });
   });
 
   it('drops an unspoken reply when a new turn starts', async () => {
     await adapter.deliver('default', null, { kind: 'chat', content: 'Stale answer.' });
     const turn = await req(port, 'POST', '/api/turn', '{"text":"new question"}', AUTH);
-    expect(turn.data).toEqual({ reply: 'One moment.', more: true });
+    expect(turn.data).toEqual({ reply: 'One moment.', more: true, status: 'working' });
   });
 
   it('ignores deliveries for another platform id and empty text', async () => {

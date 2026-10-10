@@ -7,9 +7,11 @@
  *    and hold the request open for the agent's reply
  *  - GET  /api/wait — hold open for a reply to a turn that is still running
  *
- * Both return {"reply": string, "more": boolean}. `more: true` means the agent
- * has not answered yet: `reply` is a short spoken filler and the client should
- * call /api/wait. A reply is every message the agent sent for the turn, joined
+ * Both return {"reply": string, "more": boolean, "status": "working" | "done"}.
+ * `more: true` means the agent has not answered yet: `reply` is a short spoken
+ * filler and the client should call /api/wait. `status` says the same thing as
+ * a string, for clients (iOS Shortcuts) that compare text more reliably than
+ * JSON booleans. A reply is every message the agent sent for the turn, joined
  * and cleaned up for a speech synthesizer.
  *
  * The holds are short on purpose: phone HTTP clients and tunnels give up on a
@@ -61,6 +63,7 @@ export interface VoiceAdapterOptions {
 interface TurnResult {
   reply: string;
   more: boolean;
+  status: 'working' | 'done';
 }
 
 /** Make agent text safe to hand to a speech synthesizer. */
@@ -117,7 +120,7 @@ function createVoiceAdapter(opts: VoiceAdapterOptions): ChannelAdapter {
     const deadline = Date.now() + waitMs;
     while (replies.length === 0) {
       const remaining = deadline - Date.now();
-      if (remaining <= 0) return { reply: filler, more: true };
+      if (remaining <= 0) return { reply: filler, more: true, status: 'working' };
       await nextReply(remaining);
     }
     // Let a multi-message answer finish arriving so it is spoken in one go.
@@ -126,7 +129,7 @@ function createVoiceAdapter(opts: VoiceAdapterOptions): ChannelAdapter {
       seen = replies.length;
       await sleep(opts.settleMs);
     }
-    return { reply: replies.splice(0).join(' '), more: false };
+    return { reply: replies.splice(0).join(' '), more: false, status: 'done' };
   }
 
   function handleTurn(req: http.IncomingMessage, res: http.ServerResponse): void {
