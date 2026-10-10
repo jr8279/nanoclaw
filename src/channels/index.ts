@@ -8,3 +8,4 @@
 
 import './cli.js';
 import './imessage.js';
+import './voice.js';
