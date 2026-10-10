@@ -57,6 +57,7 @@ describeLegacy('pre-contract OpenCode payload on new host core', () => {
       mcpServers: {},
       packages: { apt: [], npm: [] },
       additionalMounts: [],
+      extraNetworks: [],
       skills: [],
     };
     const opencodeDir = path.join(TEST_ROOT, 'data/v2-sessions/group-1/session-1/opencode-xdg');

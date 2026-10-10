@@ -48,6 +48,7 @@ async function claudeEnv(): Promise<Record<string, string> | undefined> {
     mcpServers: {},
     packages: { apt: [], npm: [] },
     additionalMounts: [],
+    extraNetworks: [],
     skills: [],
   };
   fs.mkdirSync(`${TEST_ROOT}/groups/claude-env`, { recursive: true });

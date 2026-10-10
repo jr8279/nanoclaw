@@ -662,13 +662,13 @@ registerResource({
         const network = args.network as string | undefined;
         if (!network) throw new Error('Provide --network <docker-network-name>');
 
-        const row = getContainerConfig(id);
+        const row = await getContainerConfig(id);
         if (!row) throw new Error(`No container config for group: ${id}`);
 
         const existing = JSON.parse(row.extra_networks) as string[];
         if (!existing.includes(network)) {
           existing.push(network);
-          updateContainerConfigJson(id, 'extra_networks', existing);
+          await updateContainerConfigJson(id, 'extra_networks', existing);
         }
         return { added: network, note: `Run \`ncl groups restart --id ${id}\` for the network to take effect.` };
       },
@@ -685,12 +685,12 @@ registerResource({
         const network = args.network as string | undefined;
         if (!network) throw new Error('Provide --network <docker-network-name>');
 
-        const row = getContainerConfig(id);
+        const row = await getContainerConfig(id);
         if (!row) throw new Error(`No container config for group: ${id}`);
 
         const existing = JSON.parse(row.extra_networks) as string[];
         const filtered = existing.filter((n) => n !== network);
-        updateContainerConfigJson(id, 'extra_networks', filtered);
+        await updateContainerConfigJson(id, 'extra_networks', filtered);
         return { removed: network, note: `Run \`ncl groups restart --id ${id}\` to apply.` };
       },
     },
