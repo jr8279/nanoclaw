@@ -440,7 +440,7 @@ describe('groups config (host-only)', () => {
 });
 
 describe('groups config add-network / remove-network (host-only)', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     if (fs.existsSync(TEST_DIR)) fs.rmSync(TEST_DIR, { recursive: true });
     fs.mkdirSync(TEST_DIR, { recursive: true });
     await runMigrations(await initTestDb());
