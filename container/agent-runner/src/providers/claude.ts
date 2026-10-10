@@ -7,6 +7,7 @@ import { query as sdkQuery, type HookCallback, type PreCompactHookInput } from '
 import { clearContainerToolInFlight, setContainerToolInFlight } from '../db/connection.js';
 import type { MemorySessionHookRegistration } from '../memory/session-hook.js';
 import { TIMEZONE, formatLocalStamp } from '../timezone.js';
+import { readModelOverride } from '../model-override.js';
 import { registerProvider } from './provider-registry.js';
 import type {
   AgentProvider,
@@ -569,7 +570,7 @@ export class ClaudeProvider implements AgentProvider {
         allowedTools: [...TOOL_ALLOWLIST, ...Object.keys(this.mcpServers).map(mcpAllowPattern)],
         disallowedTools: SDK_DISALLOWED_TOOLS,
         env: this.env,
-        model: this.model,
+        model: readModelOverride() ?? this.model,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         effort: this.effort as any,
         permissionMode: 'bypassPermissions',
@@ -660,6 +661,11 @@ export class ClaudeProvider implements AgentProvider {
       abort: () => {
         aborted = true;
         stream.end();
+      },
+      setModel: (model) => {
+        void sdkResult.setModel(model ?? this.model).catch((err: unknown) => {
+          log(`setModel failed: ${err instanceof Error ? err.message : String(err)}`);
+        });
       },
     };
   }

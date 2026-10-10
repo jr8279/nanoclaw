@@ -133,6 +133,9 @@ export interface AgentQuery {
 
   /** Force-stop the query. */
   abort(): void;
+
+  /** Change the model for subsequent turns of the active query (undefined = configured default). Optional. */
+  setModel?(model: string | undefined): void;
 }
 
 export type ProviderEvent =

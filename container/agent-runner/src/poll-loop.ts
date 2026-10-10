@@ -27,6 +27,7 @@ import {
 import { isUploadTraceCommand, uploadTrace } from './upload-trace.js';
 import { extractImageBlocks } from './image-attachments.js';
 import type { AgentProvider, AgentQuery, ProviderEvent, ProviderExchange } from './providers/types.js';
+import { readModelOverride } from './model-override.js';
 
 const POLL_INTERVAL_MS = 1000;
 const ACTIVE_POLL_INTERVAL_MS = 500;
@@ -380,9 +381,18 @@ export async function processQuery(
   let pollInFlight = false;
   let endedForCommand = false;
   let corruptionStreak = 0;
+  let appliedModel = readModelOverride();
   const pollHandle = setInterval(() => {
     if (done || pollInFlight || endedForCommand) return;
     pollInFlight = true;
+
+    // Live model switch requested via the switch_model tool.
+    const wantedModel = readModelOverride();
+    if (wantedModel !== appliedModel) {
+      appliedModel = wantedModel;
+      log(`Model override changed → ${wantedModel ?? 'default'}`);
+      query.setModel?.(wantedModel);
+    }
 
     void (async () => {
       try {
