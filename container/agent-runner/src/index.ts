@@ -19,7 +19,7 @@
  *   /home/node/.claude/ ← Claude SDK state + skill symlinks (RW)
  */
 
-import { clearModelOverride, readModelOverride } from './model-override.js';
+import { clearModelOverride, isAutoModelOverride, readModelOverride } from './model-override.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -134,6 +134,9 @@ async function main(): Promise<void> {
   // On a fresh container, revert to the configured default and have the
   // agent tell the user, so they know the switch no longer applies.
   let startupNotice: string | undefined;
+  // A model the agent picked for itself is dropped silently: the user never
+  // chose it, so there is nothing to tell them.
+  if (isAutoModelOverride()) clearModelOverride();
   const staleModel = readModelOverride();
   if (staleModel) {
     clearModelOverride();

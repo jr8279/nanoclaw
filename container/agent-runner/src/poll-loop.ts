@@ -33,7 +33,7 @@ import { stripHarnessTagArtifacts } from './harness-tag-strip.js';
 import { isUploadTraceCommand, uploadTrace } from './upload-trace.js';
 import { extractImageBlocks } from './image-attachments.js';
 import type { AgentProvider, AgentQuery, ProviderEvent, ProviderExchange } from './providers/types.js';
-import { readModelOverride } from './model-override.js';
+import { clearModelOverride, isAutoModelOverride, readModelOverride, touchAutoModelOverride } from './model-override.js';
 import type { ProviderRuntimeContract } from './provider-contracts/registry.js';
 
 const POLL_INTERVAL_MS = 1000;
@@ -714,6 +714,12 @@ export async function processQuery(
         midTurnSent = 0;
         turnStartSeq = maxOutboundSeq();
         midTurnTail = '';
+        // A model the agent picked for itself never outlives a task run, and
+        // in chat it starts its idle clock when the turn ends.
+        if (isAutoModelOverride()) {
+          if (routing.taskRun) clearModelOverride();
+          else touchAutoModelOverride();
+        }
         const next = queuedTurns.shift();
         if (next) adoptTurn(next);
         else answering = false;
