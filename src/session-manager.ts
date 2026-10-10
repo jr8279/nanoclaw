@@ -378,7 +378,7 @@ function extractAttachmentFiles(
 
       if (inbox === undefined) {
         try {
-          inbox = AnchoredDir.open(sessionDir(agentGroupId, sessionId), ['inbox', messageId], true);
+          inbox = AnchoredDir.open(sessionDir(agentGroupId, sessionId), ['inbox', ...messageId.split('/')], true);
         } catch (err) {
           log.warn('Rejecting unsafe inbox directory', { messageId, err });
           inbox = null;
