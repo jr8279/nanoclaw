@@ -1,13 +1,21 @@
 ---
 name: ticket-scout
 description: Find and compare resale and primary tickets for a sporting event or concert across free public ticket sites (TickPick, SeatGeek, Gametime, Vivid Seats, StubHub, Ticketmaster, the team's official site) plus fan sources (Reddit, fan forums), report the cheapest all-in prices and best values, and optionally track prices over time. Use when the user asks about ticket prices, cheap or discounted seats, "get-in" prices, or wants a game or show watched for a price drop. Look-up only; never buys.
-allowed-tools: Bash(agent-browser:*), WebSearch, WebFetch, Read, Write, Edit
+allowed-tools: Bash(agent-browser:*), WebSearch, WebFetch, mcp__parallel__web_search, mcp__parallel__web_fetch, Read, Write, Edit
 ---
 
 # Ticket Scout
 
 Free ticket price look-up. Uses only public web pages through `agent-browser`,
 `WebSearch` and `WebFetch`. No API keys, no paid scrapers, no accounts.
+
+**Search tools.** If `mcp__parallel__web_search` and `mcp__parallel__web_fetch`
+are available (installed by `/add-parallel-search-tool`, free and keyless),
+use them first for every search and page read below, wherever this skill says
+`WebSearch` or `WebFetch`. They are better at finding recent forum and Reddit
+posts. If a Parallel call fails or is rate limited (`429`), fall back to the
+built-in `WebSearch` / `WebFetch` and mention it in the report. Never add a
+Parallel API key; the user wants this free.
 
 **Hard rules**
 
