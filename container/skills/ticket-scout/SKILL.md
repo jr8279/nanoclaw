@@ -1,6 +1,6 @@
 ---
 name: ticket-scout
-description: Find and compare resale and primary tickets for a sporting event or concert across free public ticket sites (TickPick, SeatGeek, Gametime, Vivid Seats, StubHub, Ticketmaster, the team's official site), report the cheapest all-in prices and best values, and optionally track prices over time. Use when the user asks about ticket prices, cheap or discounted seats, "get-in" prices, or wants a game or show watched for a price drop. Look-up only; never buys.
+description: Find and compare resale and primary tickets for a sporting event or concert across free public ticket sites (TickPick, SeatGeek, Gametime, Vivid Seats, StubHub, Ticketmaster, the team's official site) plus fan sources (Reddit, Craigslist, fan forums), report the cheapest all-in prices and best values, and optionally track prices over time. Use when the user asks about ticket prices, cheap or discounted seats, "get-in" prices, or wants a game or show watched for a price drop. Look-up only; never buys.
 allowed-tools: Bash(agent-browser:*), WebSearch, WebFetch, Read, Write, Edit
 ---
 
@@ -52,10 +52,57 @@ sites because their numbers need no correction.
 | **Official site** (e.g. `seminoles.com/tickets`) | Face value and any remaining primary inventory or promos. |
 | **Aggregators** (`ticketiq.com`, Google search snippets) | Quick "starting at" numbers when a site blocks the browser. |
 
-Also worth a quick `WebSearch` for the event plus "tickets" and "promo code",
-and fan communities (for FSU: r/fsu, Tomahawk Nation forums, Warchant) where
-fans sell at face value. Report those as leads only, and remind the user to
-pay with a protected method (no Zelle/Venmo friends-and-family to strangers).
+Also worth a quick `WebSearch` for the event plus "tickets" and "promo code".
+Then check the fan sources in section 2b.
+
+## 2b. Fan and community sources
+
+Fans who can't make the game often sell at face value or below, especially in
+the last few days. These posts don't show up on ticket sites, so search them
+every run.
+
+| Source | How to search it |
+|--------|------------------|
+| **Reddit** | See below. Check the home team's sub (r/fsu), the city sub (r/Tallahassee), the **opponent's** school and team subs, and r/CFB game threads. Find the right sub names with `WebSearch` if unsure. |
+| **Craigslist** | `https://<city>.craigslist.org/search/tia?query=<team>+tickets` (tickets section). For FSU use `tallahassee`; also try the opponent's city for away fans selling. |
+| **Fan forums** | Warchant, Noles247 and Tomahawk Nation for FSU (most have a ticket exchange board); the equivalent boards for the opponent. Some boards need a paid membership: read only what's public and say when a board is behind a login. |
+| **Site search** | `WebSearch` for things like `"FSU" "NC State" tickets "face value"`, `... "can't make it"`, `... "need gone"`, limited to the last week. |
+
+**Reading Reddit without an account.** Try the public JSON search first:
+
+```bash
+agent-browser open "https://old.reddit.com/r/fsu/search.json?q=tickets&restrict_sr=on&sort=new&t=month"
+agent-browser get text body
+```
+
+Search terms to rotate: `tickets`, `selling`, `extra`, `face value`, the
+opponent's name, and `ISO` (to spot buyers, which tells you demand). If the JSON
+is blocked, open the same search without `.json` on `old.reddit.com` and read
+it with `snapshot -c`. Also open the newest pinned weekly or game-day thread,
+since many subs push ticket posts there.
+
+**What to capture for each post:** title or short quote, asking price and
+quantity if stated, section if stated, how old the post is, the link, and
+whether it looks still available (no "sold" edit or reply).
+
+**Places you can't reach.** Facebook groups and Marketplace, X and Nextdoor
+need a login, so don't try. Give the user ready-made search links instead, for
+example `https://www.facebook.com/marketplace/search?query=fsu%20football%20tickets`.
+
+**Scam safety, always included when you report a fan listing:**
+
+- Only post links and details. Never reply to, message or post as the user.
+  If they want, draft a short message they can send themselves.
+- Flag red flags: brand-new or empty accounts, prices far below everyone else,
+  "screenshot" or PDF tickets for a mobile-only venue (FSU is mobile-only
+  through Ticketmaster), urgency pressure, or asking to pay first by
+  Zelle, Venmo friends-and-family, Cash App, gift cards or crypto.
+- Recommend the safe path: the seller transfers tickets through Ticketmaster
+  (or the venue's official app) and the user pays with a protected method
+  such as PayPal Goods and Services, or they meet in person and accept the
+  transfer before paying.
+- Report fan posts in their own section, marked "unverified", never mixed into
+  the verified ticket-site prices.
 
 ## 3. How to read each site
 
@@ -121,6 +168,12 @@ Best value (lower level)
 - Vivid Seats: $79, Sec 18 Row 22 (sideline) <link>
 
 Baseline: face value ~$60, median resale $72
+Fan posts (unverified, buy only via Ticketmaster transfer)
+- r/fsu, 5h ago: "2 upper deck, $30 each, can't make it" <link>
+- Craigslist Tallahassee, 1d ago: 4 tix Sec 27, $45 each <link>
+  Red flag: asks for Zelle up front
+- Facebook Marketplace (needs your login): <search link>
+
 Blocked: StubHub (captcha), price from search snippet ~$45, not verified
 Take: prices are soft for this game; waiting until Friday night is a
 reasonable bet if you are flexible.
@@ -141,3 +194,8 @@ Then offer a scheduled task (for example twice a day, then hourly on game day)
 that re-runs this skill, appends to the log, and messages the user only when
 the cheapest all-in price drops below their target or falls 15%+ from the
 last report. Stop the task after kickoff.
+
+For fan sources, keep the links you've already reported in the same log
+(`seen: <url>`) and only message the user about **new** posts that fit their
+quantity and budget. Check fan sources more often on the last two days before
+the game; that's when most "need gone" posts appear.
