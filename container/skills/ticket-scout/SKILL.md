@@ -1,6 +1,6 @@
 ---
 name: ticket-scout
-description: Find and compare resale and primary tickets for a sporting event or concert across free public ticket sites (TickPick, SeatGeek, Gametime, Vivid Seats, StubHub, Ticketmaster, the team's official site) plus fan sources (Reddit, Craigslist, fan forums), report the cheapest all-in prices and best values, and optionally track prices over time. Use when the user asks about ticket prices, cheap or discounted seats, "get-in" prices, or wants a game or show watched for a price drop. Look-up only; never buys.
+description: Find and compare resale and primary tickets for a sporting event or concert across free public ticket sites (TickPick, SeatGeek, Gametime, Vivid Seats, StubHub, Ticketmaster, the team's official site) plus fan sources (Reddit, fan forums), report the cheapest all-in prices and best values, and optionally track prices over time. Use when the user asks about ticket prices, cheap or discounted seats, "get-in" prices, or wants a game or show watched for a price drop. Look-up only; never buys.
 allowed-tools: Bash(agent-browser:*), WebSearch, WebFetch, Read, Write, Edit
 ---
 
@@ -64,7 +64,6 @@ every run.
 | Source | How to search it |
 |--------|------------------|
 | **Reddit** | See below. Check the home team's sub (r/fsu), the city sub (r/Tallahassee), the **opponent's** school and team subs, and r/CFB game threads. Find the right sub names with `WebSearch` if unsure. |
-| **Craigslist** | `https://<city>.craigslist.org/search/tia?query=<team>+tickets` (tickets section). For FSU use `tallahassee`; also try the opponent's city for away fans selling. |
 | **Fan forums** | Warchant, Noles247 and Tomahawk Nation for FSU (most have a ticket exchange board); the equivalent boards for the opponent. Some boards need a paid membership: read only what's public and say when a board is behind a login. |
 | **Site search** | `WebSearch` for things like `"FSU" "NC State" tickets "face value"`, `... "can't make it"`, `... "need gone"`, limited to the last week. |
 
@@ -84,6 +83,8 @@ since many subs push ticket posts there.
 **What to capture for each post:** title or short quote, asking price and
 quantity if stated, section if stated, how old the post is, the link, and
 whether it looks still available (no "sold" edit or reply).
+
+**Excluded:** never search or link Craigslist, and drop any Craigslist results that come back from a web search. The user does not want to use it.
 
 **Places you can't reach.** Facebook groups and Marketplace, X and Nextdoor
 need a login, so don't try. Give the user ready-made search links instead, for
@@ -170,7 +171,7 @@ Best value (lower level)
 Baseline: face value ~$60, median resale $72
 Fan posts (unverified, buy only via Ticketmaster transfer)
 - r/fsu, 5h ago: "2 upper deck, $30 each, can't make it" <link>
-- Craigslist Tallahassee, 1d ago: 4 tix Sec 27, $45 each <link>
+- Warchant ticket board, 1d ago: 4 tix Sec 27, $45 each <link>
   Red flag: asks for Zelle up front
 - Facebook Marketplace (needs your login): <search link>
 
