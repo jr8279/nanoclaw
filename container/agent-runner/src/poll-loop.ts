@@ -34,6 +34,7 @@ import { isUploadTraceCommand, uploadTrace } from './upload-trace.js';
 import { extractImageBlocks } from './image-attachments.js';
 import type { AgentProvider, AgentQuery, ProviderEvent, ProviderExchange } from './providers/types.js';
 import {
+  MODEL_ALIASES,
   clearModelOverride,
   isAutoModelOverride,
   readModelOverride,
@@ -272,10 +273,13 @@ export async function runPollLoop(config: PollLoopConfig): Promise<void> {
       clearContinuation(config.providerName);
     }
 
+    const taskInference = routing.taskRun ? taskInferenceOverride(keep) : {};
+
     const query = config.provider.query({
       prompt: providerPrompt,
       continuation,
       cwd: config.cwd,
+      ...taskInference,
       systemContext: config.systemContext,
     });
     // Process the query while concurrently polling for new messages
@@ -341,6 +345,27 @@ export async function runPollLoop(config: PollLoopConfig): Promise<void> {
     // (e.g. stream closed unexpectedly).
     markCompleted(processingIds);
     log(`Completed ${ids.length} message(s)`);
+  }
+}
+
+/**
+ * The model and effort a task carries in its content envelope
+ * (`ncl tasks create/update --model --effort`), so a mechanical task starts
+ * on a cheaper model from its first request instead of switching mid-run.
+ */
+export function taskInferenceOverride(messages: MessageInRow[]): { model?: string; effort?: string } {
+  const task = messages.find((m) => m.kind === 'task');
+  if (!task) return {};
+  try {
+    const content = JSON.parse(task.content) as { model?: unknown; effort?: unknown };
+    const model = typeof content.model === 'string' && content.model ? content.model : undefined;
+    const effort = typeof content.effort === 'string' && content.effort ? content.effort : undefined;
+    return {
+      ...(model ? { model: MODEL_ALIASES[model] ?? model } : {}),
+      ...(effort ? { effort } : {}),
+    };
+  } catch {
+    return {};
   }
 }
 

@@ -195,6 +195,41 @@ describe('tasks CLI resource', () => {
     expect(overridden.ok).toBe(true);
   });
 
+  it('carries a per-task model and effort; an agent may only pick haiku or sonnet', async () => {
+    const created = await dispatch(
+      {
+        id: 'cm',
+        command: 'tasks-create',
+        args: { prompt: 'self check', name: 'check', recurrence: '0 5 * * *', model: 'Haiku', effort: 'low' },
+      },
+      agentCtx(),
+    );
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const seriesId = (created.data as { series_id: string }).series_id;
+    const got = await dispatch({ id: 'gm', command: 'tasks-get', args: { id: seriesId } }, agentCtx());
+    expect(got.ok && (got.data as { model: string; effort: string })).toMatchObject({ model: 'haiku', effort: 'low' });
+
+    const opus = await dispatch(
+      { id: 'uo', command: 'tasks-update', args: { id: seriesId, model: 'opus' } },
+      agentCtx(),
+    );
+    expect(!opus.ok && opus.error.message).toContain('haiku, sonnet');
+    const badEffort = await dispatch(
+      { id: 'ue', command: 'tasks-update', args: { id: seriesId, effort: 'extreme' } },
+      agentCtx(),
+    );
+    expect(!badEffort.ok && badEffort.error.message).toContain('--effort must be one of');
+
+    const cleared = await dispatch(
+      { id: 'uc2', command: 'tasks-update', args: { id: seriesId, model: 'default', effort: 'default' } },
+      agentCtx(),
+    );
+    expect(cleared.ok).toBe(true);
+    const after = await dispatch({ id: 'gm2', command: 'tasks-get', args: { id: seriesId } }, agentCtx());
+    expect(after.ok && (after.data as { model: null; effort: null })).toMatchObject({ model: null, effort: null });
+  });
+
   it('a --script gate exempts frequent recurrence — the sanctioned monitor pattern', async () => {
     const scripted = await dispatch(
       {

@@ -341,9 +341,9 @@ export class ClaudeProvider implements AgentProvider {
         // turns them into throttled `activity` and nothing else.
         includePartialMessages: true,
         env: this.env,
-        model: readModelOverride() ?? this.inference.model,
+        model: readModelOverride() ?? input.model ?? this.inference.model,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        effort: this.inference.effort as any,
+        effort: (input.effort ?? this.inference.effort) as any,
         permissionMode: this.executionPolicy.permissionMode,
         allowDangerouslySkipPermissions: this.executionPolicy.allowDangerouslySkipPermissions,
         settingSources: ['project', 'user', 'local'],
@@ -487,7 +487,7 @@ export class ClaudeProvider implements AgentProvider {
         stream.end();
       },
       setModel: (model) => {
-        void sdkResult.setModel(model ?? this.inference.model).catch((err: unknown) => {
+        void sdkResult.setModel(model ?? input.model ?? this.inference.model).catch((err: unknown) => {
           log(`setModel failed: ${err instanceof Error ? err.message : String(err)}`);
         });
       },

@@ -27,6 +27,8 @@ export interface PreparedScheduledTask {
   prompt: string;
   recurrence: string | null;
   script: string | null;
+  model?: string | null;
+  effort?: string | null;
   processAfter: string;
 }
 
@@ -106,6 +108,8 @@ export function prepareScheduledTask(input: {
   recurrence?: string | null;
   processAfter?: string;
   script?: string | null;
+  model?: string | null;
+  effort?: string | null;
   dangerouslyOverrideRecurrenceLimit?: boolean;
   timezone?: string;
 }): PreparedScheduledTask {
@@ -125,7 +129,15 @@ export function prepareScheduledTask(input: {
     processAfter = parseProcessAfter(input.processAfter, tz);
   }
 
-  return { name: input.name, prompt: input.prompt, recurrence, script, processAfter };
+  return {
+    name: input.name,
+    prompt: input.prompt,
+    recurrence,
+    script,
+    model: input.model ?? null,
+    effort: input.effort ?? null,
+    processAfter,
+  };
 }
 
 /** Persist a prepared task through NanoClaw's single task/session representation. */
@@ -146,6 +158,8 @@ export async function createScheduledTask(
       content: JSON.stringify({
         prompt: task.prompt,
         script: task.script,
+        model: task.model ?? null,
+        effort: task.effort ?? null,
         originSessionId: options?.originSessionId ?? null,
       }),
       status: options?.status ?? 'pending',

@@ -131,6 +131,34 @@ function selectTask(mailbox: InboundMailbox, id: string): TaskRow | undefined {
   return mailbox.getTask(id);
 }
 
+const TASK_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
+// An agent schedules its own tasks without approval, so it may only pick the
+// models that cannot raise the user's spend above the group default.
+const AGENT_TASK_MODELS = ['haiku', 'sonnet'];
+
+/** `--model`: undefined = not given, null = cleared ("default"/"none"), else the alias or model id. */
+function taskModelArg(args: Record<string, unknown>, ctx: CallerContext): string | null | undefined {
+  const raw = normalizeNullableString(args.model);
+  if (raw === undefined || raw === null) return raw;
+  const model = raw.trim().toLowerCase();
+  if (model === 'default') return null;
+  if (!/^[a-z0-9][a-z0-9._\-[\]]*$/.test(model)) throw new Error(`--model is not a valid model name: ${raw}`);
+  if (ctx.caller === 'agent' && !AGENT_TASK_MODELS.includes(model)) {
+    throw new Error(`--model for a task must be one of: ${AGENT_TASK_MODELS.join(', ')}, default`);
+  }
+  return model;
+}
+
+/** `--effort`: undefined = not given, null = cleared ("default"/"none"), else the level. */
+function taskEffortArg(args: Record<string, unknown>): string | null | undefined {
+  const raw = normalizeNullableString(args.effort);
+  if (raw === undefined || raw === null) return raw;
+  const effort = raw.trim().toLowerCase();
+  if (effort === 'default') return null;
+  if (!TASK_EFFORTS.includes(effort)) throw new Error(`--effort must be one of: ${TASK_EFFORTS.join(', ')}, default`);
+  return effort;
+}
+
 function taskId(args: Record<string, unknown>): string {
   const id = str(args.id);
   if (!id) throw new Error('task series id is required');
@@ -150,6 +178,8 @@ async function createTask(args: Record<string, unknown>, ctx: CallerContext) {
     recurrence,
     processAfter: str(args.process_after),
     script,
+    model: taskModelArg(args, ctx) ?? null,
+    effort: taskEffortArg(args) ?? null,
     dangerouslyOverrideRecurrenceLimit: bool(args.dangerously_override_recurrence_limit),
     timezone: await resolveGroupTimezone(group),
   });
@@ -250,6 +280,8 @@ async function getTask(args: Record<string, unknown>, ctx: CallerContext) {
         ...toOutput(session, row),
         prompt: content.prompt,
         script: content.script,
+        model: content.model,
+        effort: content.effort,
         origin_session_id: content.originSessionId,
         completed_runs: stats.runs,
         failed_runs: stats.failedRuns,
@@ -350,6 +382,10 @@ async function updateTaskCommand(args: Record<string, unknown>, ctx: CallerConte
     update.recurrence = recurrence;
   }
   if (script !== undefined) update.script = script;
+  const model = taskModelArg(args, ctx);
+  if (model !== undefined) update.model = model;
+  const effort = taskEffortArg(args);
+  if (effort !== undefined) update.effort = effort;
   const fields = Object.keys(update);
   if (fields.length === 0) throw new Error('nothing to update');
 
@@ -430,6 +466,20 @@ registerResource({
     { name: 'recurrence', type: 'string', description: 'Optional cron expression.', updatable: true },
     { name: 'prompt', type: 'string', description: 'Task prompt.', required: true, updatable: true },
     { name: 'script', type: 'string', description: 'Optional pre-task bash script.', updatable: true },
+    {
+      name: 'model',
+      type: 'string',
+      description:
+        "Model this task's runs start on: haiku, sonnet, or default (the group's model). Use haiku for mechanical multi-step checks.",
+      updatable: true,
+    },
+    {
+      name: 'effort',
+      type: 'string',
+      description:
+        "Reasoning effort for this task's runs: low, medium, high, xhigh, max, or default (the group's effort).",
+      updatable: true,
+    },
   ],
   operations: {},
   customOperations: {
@@ -520,6 +570,18 @@ registerResource({
           description: 'Pre-task gate script (bash) — see the --script contract above.',
         },
         {
+          name: 'model',
+          type: 'string',
+          description:
+            "Model this task's runs start on: haiku, sonnet, or default (the group's model). Use haiku for mechanical multi-step checks.",
+        },
+        {
+          name: 'effort',
+          type: 'string',
+          description:
+            "Reasoning effort for this task's runs: low, medium, high, xhigh, max, or default (the group's effort).",
+        },
+        {
           name: 'group',
           type: 'string',
           description: 'Agent group id (host callers; auto-filled to your own group inside a container).',
@@ -575,6 +637,17 @@ registerResource({
             'Schedule more than 4 fires/day anyway. Only after the user explicitly confirmed they understand the quota/token cost and you agree it is right.',
         },
         { name: 'script', type: 'string', description: 'New pre-task script; "null"/"none" removes it.' },
+        {
+          name: 'model',
+          type: 'string',
+          description: "Model this task's runs start on: haiku, sonnet, or default (the group's model).",
+        },
+        {
+          name: 'effort',
+          type: 'string',
+          description:
+            "Reasoning effort for this task's runs: low, medium, high, xhigh, max, or default (the group's effort).",
+        },
         {
           name: 'group',
           type: 'string',

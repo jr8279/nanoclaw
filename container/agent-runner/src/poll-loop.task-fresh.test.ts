@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 
 import { getContinuation, setContinuation } from './db/session-state.js';
 import { closeSessionDb, getInboundDb, initTestSessionDb } from './mailbox/sqlite/connection.js';
-import { runPollLoop } from './poll-loop.js';
+import { runPollLoop, taskInferenceOverride } from './poll-loop.js';
+import type { MessageInRow } from './db/messages-in.js';
 import type { AgentProvider, AgentQuery, ProviderEvent, QueryInput } from './providers/types.js';
 
 // A task run must not resume the transcript of earlier runs: the series fires
@@ -84,5 +85,27 @@ describe('task runs start fresh', () => {
     const provider = new RecordingProvider();
     await runUntilQueried(provider);
     expect(provider.continuations).toEqual(['old-session']);
+  });
+});
+
+describe('task model and effort', () => {
+  const row = (kind: string, content: object) => ({ kind, content: JSON.stringify(content) }) as MessageInRow;
+
+  it('resolves a model alias and passes effort through', () => {
+    expect(taskInferenceOverride([row('task', { prompt: 'x', model: 'haiku', effort: 'low' })])).toEqual({
+      model: 'claude-haiku-5-5',
+      effort: 'low',
+    });
+  });
+
+  it('passes a full model id through unchanged', () => {
+    expect(taskInferenceOverride([row('task', { prompt: 'x', model: 'claude-custom-1' })])).toEqual({
+      model: 'claude-custom-1',
+    });
+  });
+
+  it('is empty when the task sets nothing, and ignores chat rows', () => {
+    expect(taskInferenceOverride([row('task', { prompt: 'x', model: null })])).toEqual({});
+    expect(taskInferenceOverride([row('chat', { text: 'hi', model: 'haiku' })])).toEqual({});
   });
 });

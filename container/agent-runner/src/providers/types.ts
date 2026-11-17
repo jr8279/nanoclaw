@@ -128,6 +128,12 @@ export interface QueryInput {
   /** Working directory inside the container. */
   cwd: string;
 
+  /** Model for this query only (a task's own setting); the provider default otherwise. */
+  model?: string;
+
+  /** Reasoning effort for this query only (a task's own setting). */
+  effort?: string;
+
   /**
    * System context to inject. Providers translate this into whatever their
    * SDK expects (preset append, full system prompt, per-turn injection…).
