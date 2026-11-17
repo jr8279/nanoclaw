@@ -10,6 +10,8 @@
 # What is deliberately excluded (never leaves this machine):
 #   - .env, *.keys.json, data/photon-auth.json — live credentials
 #   - node_modules/, .pnpm-store/, tmp*/, .claude-fragments/ — regenerated on spawn
+#   - *venv/, whisper-models/, __pycache__/ — reinstallable tools and model
+#     downloads (hundreds of MB; one model file is over GitHub's 100 MB limit)
 #   - CLAUDE.local.md, .claude-shared.md — composer-regenerated, not source state
 #   - data/v2-sessions/ — ephemeral per-session inbound/outbound DBs
 #
@@ -29,15 +31,23 @@ fi
 mkdir -p "$BACKUP_DIR/data" "$BACKUP_DIR/groups"
 
 echo "[backup] snapshotting central DB..."
-pnpm --dir "$NANOCLAW_DIR" exec tsx scripts/backup-snapshot.ts \
-  "$NANOCLAW_DIR/data/v2.db" "$BACKUP_DIR/data/v2.db"
+# Run from the checkout: corepack picks the pnpm version from the package.json
+# in the current directory, and systemd starts this script in /, where it
+# falls back to a newer pnpm that refuses this project.
+(cd "$NANOCLAW_DIR" && pnpm exec tsx scripts/backup-snapshot.ts \
+  "$NANOCLAW_DIR/data/v2.db" "$BACKUP_DIR/data/v2.db")
 
 echo "[backup] syncing groups/ (excluding scratch, secrets, node_modules)..."
-rsync -a --delete \
+rsync -a --delete --delete-excluded \
   --exclude 'node_modules/' \
   --exclude '.pnpm-store/' \
   --exclude 'tmp/' \
   --exclude 'tmp-*/' \
+  --exclude 'tmp_*/' \
+  --exclude 'heic-tmp*/' \
+  --exclude '*venv/' \
+  --exclude 'whisper-models/' \
+  --exclude '__pycache__/' \
   --exclude '.claude-fragments/' \
   --exclude 'CLAUDE.local.md' \
   --exclude '.claude-shared.md' \
