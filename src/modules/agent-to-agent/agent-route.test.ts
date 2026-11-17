@@ -7,7 +7,11 @@ import { forwardAttachedFiles, isSafeAttachmentName, routeAgentMessage } from '.
 import { log } from '../../log.js';
 import { createDestination } from './db/agent-destinations.js';
 import { initTestDb, closeDb, runMigrations, createAgentGroup } from '../../db/index.js';
-import { createSession, updateSession } from '../../db/sessions.js';
+import { createMessagingGroup } from '../../db/messaging-groups.js';
+import { createSession, findAgentInboxSession, updateSession } from '../../db/sessions.js';
+import { upsertUserDm } from '../permissions/db/user-dms.js';
+import { grantRole } from '../permissions/db/user-roles.js';
+import { createUser } from '../permissions/db/users.js';
 import { inboundDbPath } from '../../mailbox/sqlite/paths.js';
 import { initSessionFolder, sessionDir, writeSessionMessage } from '../../session-manager.js';
 import type { Session } from '../../types.js';
@@ -43,6 +47,11 @@ function readInbound(agentGroupId: string, sessionId: string) {
   }>;
   db.close();
   return rows;
+}
+
+async function readInbox(agentGroupId: string) {
+  const inbox = await findAgentInboxSession(agentGroupId);
+  return inbox ? readInbound(agentGroupId, inbox.id) : [];
 }
 
 describe('isSafeAttachmentName', () => {
@@ -223,7 +232,7 @@ describe('routeAgentMessage return-path', () => {
     expect(s2Rows).toHaveLength(0);
   });
 
-  it('fallback: a2a with no in_reply_to falls through to newest-session lookup', async () => {
+  it('non-reply: lands in the target inbox, not the newest session', async () => {
     // No prior conversation. B initiates an a2a to A out of the blue.
     await routeAgentMessage(
       {
@@ -235,15 +244,14 @@ describe('routeAgentMessage return-path', () => {
       SB,
     );
 
-    // Newest session wins (current heuristic, preserved).
-    const s1Rows = readInbound(A, S1.id);
-    const s2Rows = readInbound(A, S2.id);
-    expect(s1Rows).toHaveLength(0);
-    expect(s2Rows).toHaveLength(1);
+    expect(readInbound(A, S1.id)).toHaveLength(0);
+    expect(readInbound(A, S2.id)).toHaveLength(0);
+    expect(await readInbox(A)).toHaveLength(1);
   });
 
-  it('peer-affinity fallback: with no in_reply_to, routes to most recent peer-source session', async () => {
-    // A.S1 sends to B (establishing affinity: B's last contact from A was via S1).
+  it('non-reply after a prior exchange goes to the inbox, not the last peer session', async () => {
+    // A.S1 talked to B earlier. B's later message is not a reply, so it must
+    // not be pulled into S1 (which may be a member's chat).
     await routeAgentMessage(
       {
         id: 'msg-from-A-S1-pre',
@@ -253,31 +261,24 @@ describe('routeAgentMessage return-path', () => {
       },
       S1,
     );
-
-    // B sends a follow-up but its container forgot to set in_reply_to (e.g.
-    // emitted via an MCP tool path that doesn't thread the batch's in_reply_to
-    // through). The host should still route this to S1 because S1 is the
-    // session most recently in conversation with B — not the chronologically
-    // newest session of A.
     await routeAgentMessage(
       {
-        id: 'msg-from-B-followup',
+        id: 'msg-from-B-unrelated',
         platform_id: A,
-        content: JSON.stringify({ text: 'standing by' }),
+        content: JSON.stringify({ text: 'unrelated update' }),
         in_reply_to: null,
       },
       SB,
     );
 
-    const s1Rows = readInbound(A, S1.id);
-    const s2Rows = readInbound(A, S2.id);
-    // Affinity wins: reply to S1, not the newer S2.
-    expect(s1Rows).toHaveLength(1);
-    expect(JSON.parse(s1Rows[0].content).text).toBe('standing by');
-    expect(s2Rows).toHaveLength(0);
+    expect(readInbound(A, S1.id)).toHaveLength(0);
+    expect(readInbound(A, S2.id)).toHaveLength(0);
+    const inbox = await readInbox(A);
+    expect(inbox).toHaveLength(1);
+    expect(JSON.parse(inbox[0].content).text).toBe('unrelated update');
   });
 
-  it('stale origin fallback: closed origin session falls through to newest active', async () => {
+  it('stale origin fallback: closed origin session falls through to the inbox', async () => {
     // A.S1 sends to B, establishing source_session_id = S1.id on B's inbound.
     await routeAgentMessage(
       { id: 'msg-fwd', platform_id: B, content: JSON.stringify({ text: 'hello' }), in_reply_to: null },
@@ -289,16 +290,15 @@ describe('routeAgentMessage return-path', () => {
     // Close S1 — simulates session cleanup or channel disconnect.
     await updateSession(S1.id, { status: 'closed' });
 
-    // B replies. origin points to S1 (closed), should fall through to S2.
+    // B replies. origin points to S1 (closed), should fall through to the inbox.
     await routeAgentMessage(
       { id: 'msg-reply-stale', platform_id: A, content: JSON.stringify({ text: 'reply' }), in_reply_to: inboundId },
       SB,
     );
 
-    const s1Rows = readInbound(A, S1.id);
-    const s2Rows = readInbound(A, S2.id);
-    expect(s1Rows).toHaveLength(0);
-    expect(s2Rows).toHaveLength(1);
+    expect(readInbound(A, S1.id)).toHaveLength(0);
+    expect(readInbound(A, S2.id)).toHaveLength(0);
+    expect(await readInbox(A)).toHaveLength(1);
   });
 
   it('cross-agent-group guard: origin session belonging to wrong agent group is rejected', async () => {
@@ -334,7 +334,7 @@ describe('routeAgentMessage return-path', () => {
     const cInboundId = bRows.find((r) => r.platform_id === C)!.id;
 
     // B replies to A, but in_reply_to references the C-originated row.
-    // Guard rejects (SC belongs to C, not A) → falls through to newest of A.
+    // Guard rejects (SC belongs to C, not A) → falls through to A's inbox.
     await routeAgentMessage(
       {
         id: 'msg-reply-tamper',
@@ -345,13 +345,12 @@ describe('routeAgentMessage return-path', () => {
       SB,
     );
 
-    const s1Rows = readInbound(A, S1.id);
-    const s2Rows = readInbound(A, S2.id);
-    expect(s1Rows).toHaveLength(0);
-    expect(s2Rows).toHaveLength(1);
+    expect(readInbound(A, S1.id)).toHaveLength(0);
+    expect(readInbound(A, S2.id)).toHaveLength(0);
+    expect(await readInbox(A)).toHaveLength(1);
   });
 
-  it('in_reply_to referencing a non-a2a row falls through to newest session', async () => {
+  it('in_reply_to referencing a non-a2a row falls through to the inbox', async () => {
     // Write a channel message into B's inbound (no source_session_id).
     await writeSessionMessage(B, SB.id, {
       id: 'channel-msg-1',
@@ -364,7 +363,7 @@ describe('routeAgentMessage return-path', () => {
     });
 
     // B replies to A with in_reply_to pointing to the channel message.
-    // source_session_id is null → peer-affinity finds nothing → newest of A.
+    // source_session_id is null → no return path → A's inbox.
     await routeAgentMessage(
       {
         id: 'msg-reply-channel',
@@ -375,10 +374,9 @@ describe('routeAgentMessage return-path', () => {
       SB,
     );
 
-    const s1Rows = readInbound(A, S1.id);
-    const s2Rows = readInbound(A, S2.id);
-    expect(s1Rows).toHaveLength(0);
-    expect(s2Rows).toHaveLength(1);
+    expect(readInbound(A, S1.id)).toHaveLength(0);
+    expect(readInbound(A, S2.id)).toHaveLength(0);
+    expect(await readInbox(A)).toHaveLength(1);
   });
 
   it('self-message is allowed without a destination row', async () => {
@@ -388,10 +386,10 @@ describe('routeAgentMessage return-path', () => {
       S1,
     );
 
-    // Lands in S2 (newest active session of A via resolveSession fallback).
-    const s2Rows = readInbound(A, S2.id);
-    expect(s2Rows).toHaveLength(1);
-    expect(JSON.parse(s2Rows[0].content).text).toBe('self-note');
+    // Not a reply, so it lands in A's inbox.
+    const inbox = await readInbox(A);
+    expect(inbox).toHaveLength(1);
+    expect(JSON.parse(inbox[0].content).text).toBe('self-note');
   });
 
   it('BUG: no volume cap on a2a routing — unbounded ping-pong is allowed (#2063)', async () => {
@@ -420,7 +418,104 @@ describe('routeAgentMessage return-path', () => {
     const s2Rows = readInbound(A, S2.id);
     expect(errors).toHaveLength(0);
     expect(bRows).toHaveLength(20);
-    expect(s1Rows.length + s2Rows.length).toBe(20);
+    expect(s1Rows.length + s2Rows.length + (await readInbox(A)).length).toBe(20);
+  });
+
+  describe('approver DM', () => {
+    async function dmSession(id: string, userId: string, created_at: string): Promise<Session> {
+      await createMessagingGroup({
+        id: `mg-${id}`,
+        channel_type: 'imessage',
+        platform_id: userId,
+        instance: 'imessage',
+        name: null,
+        is_group: 0,
+        unknown_sender_policy: 'strict',
+        created_at: now(),
+      });
+      await createUser({ id: userId, kind: 'imessage', display_name: null, created_at: now() });
+      await upsertUserDm({
+        user_id: userId,
+        channel_type: 'imessage',
+        messaging_group_id: `mg-${id}`,
+        resolved_at: now(),
+      });
+      const session: Session = {
+        id,
+        agent_group_id: A,
+        messaging_group_id: `mg-${id}`,
+        thread_id: null,
+        agent_provider: null,
+        status: 'active',
+        container_status: 'stopped',
+        last_active: null,
+        created_at,
+      };
+      await createSession(session);
+      initSessionFolder(A, session.id);
+      return session;
+    }
+
+    it("routes a non-reply to the owner's DM session over newer sessions", async () => {
+      const ownerDm = await dmSession('sess-A-owner-dm', 'imessage:+1000', '2025-12-01T00:00:00.000Z');
+      await grantRole({
+        user_id: 'imessage:+1000',
+        role: 'owner',
+        agent_group_id: null,
+        granted_by: null,
+        granted_at: now(),
+      });
+
+      await routeAgentMessage(
+        { id: 'msg-to-owner', platform_id: A, content: JSON.stringify({ text: 'for the owner' }), in_reply_to: null },
+        SB,
+      );
+
+      expect(readInbound(A, ownerDm.id)).toHaveLength(1);
+      expect(readInbound(A, S2.id)).toHaveLength(0);
+      expect(await readInbox(A)).toHaveLength(0);
+    });
+
+    it("skips a member's DM (no role) and uses the inbox", async () => {
+      const memberDm = await dmSession('sess-A-member-dm', 'imessage:+2000', '2026-03-01T00:00:00.000Z');
+
+      await routeAgentMessage(
+        {
+          id: 'msg-not-member',
+          platform_id: A,
+          content: JSON.stringify({ text: 'not for the kid' }),
+          in_reply_to: null,
+        },
+        SB,
+      );
+
+      expect(readInbound(A, memberDm.id)).toHaveLength(0);
+      expect(await readInbox(A)).toHaveLength(1);
+    });
+
+    it('a reply still returns to the originating session, even a member DM', async () => {
+      const memberDm = await dmSession('sess-A-member-dm', 'imessage:+2000', '2026-03-01T00:00:00.000Z');
+      await dmSession('sess-A-owner-dm', 'imessage:+1000', '2025-12-01T00:00:00.000Z');
+      await grantRole({
+        user_id: 'imessage:+1000',
+        role: 'owner',
+        agent_group_id: null,
+        granted_by: null,
+        granted_at: now(),
+      });
+
+      await routeAgentMessage(
+        { id: 'msg-from-member-dm', platform_id: B, content: JSON.stringify({ text: 'question' }), in_reply_to: null },
+        memberDm,
+      );
+      const yId = readInbound(B, SB.id)[0].id;
+      await routeAgentMessage(
+        { id: 'msg-answer', platform_id: A, content: JSON.stringify({ text: 'answer' }), in_reply_to: yId },
+        SB,
+      );
+
+      expect(readInbound(A, memberDm.id)).toHaveLength(1);
+    });
   });
 
   it('file forwarding: copies bytes from source outbox to target inbox', async () => {

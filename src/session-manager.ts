@@ -15,6 +15,7 @@ import { getMessagingGroup } from './db/messaging-groups.js';
 import { isUniqueViolation } from './db/errors.js';
 import {
   createSession,
+  findAgentInboxSession,
   findSystemSession,
   findSessionByAgentGroup,
   findSessionForAgent,
@@ -100,6 +101,9 @@ function sessionCreationKey(
  * - 'per-thread': one session per (messaging group, thread)
  * - 'agent-shared': one session per agent group — all messaging groups
  *   wired with this mode share a single session (e.g. GitHub + Slack)
+ *
+ * 'shared' with no messaging group resolves the agent group's inbox session
+ * (see `findAgentInboxSession`).
  */
 export async function resolveSession(
   agentGroupId: string,
@@ -120,6 +124,11 @@ export async function resolveSession(
       // Scope lookup by agent_group_id so fan-out to multiple agents in the
       // same chat doesn't accidentally deliver to the wrong agent's session.
       const existing = await findSessionForAgent(agentGroupId, messagingGroupId, lookupThreadId);
+      if (existing) {
+        return { session: existing, created: false };
+      }
+    } else if (sessionMode === 'shared') {
+      const existing = await findAgentInboxSession(agentGroupId);
       if (existing) {
         return { session: existing, created: false };
       }
@@ -148,7 +157,9 @@ export async function resolveSession(
           ? await findSessionByAgentGroup(agentGroupId)
           : messagingGroupId
             ? await findSessionForAgent(agentGroupId, messagingGroupId, lookupThreadId)
-            : undefined;
+            : sessionMode === 'shared'
+              ? await findAgentInboxSession(agentGroupId)
+              : undefined;
       if (!existing) throw error;
       return { session: existing, created: false };
     }

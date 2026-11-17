@@ -21,7 +21,7 @@
 import { AnchoredDir, copyRegularFile } from '../../anchored-dir.js';
 import { isSafeAttachmentName } from '../../attachment-safety.js';
 import { getAgentGroup } from '../../db/agent-groups.js';
-import { getSession } from '../../db/sessions.js';
+import { findApproverDmSession, getSession } from '../../db/sessions.js';
 import { requestWake } from '../../request-wake.js';
 import { GuardDenyError, guard } from '../../guard/index.js';
 import { log } from '../../log.js';
@@ -154,42 +154,36 @@ export interface RoutableAgentMessage {
  *    conversation, and replies should land there even when the target has
  *    multiple active sessions.
  *
- * 2. **Peer-affinity fallback**: if (1) misses (in_reply_to is null or the
- *    referenced row isn't an a2a inbound), look up the most recent a2a
- *    inbound *from the target agent group* in source's inbound and use its
- *    `source_session_id`. The intuition: the last time this peer talked to
- *    me, which target session was driving? Route the reply there, since
- *    that's the session most plausibly in active conversation.
+ * 2. **Approver DM**: anything that isn't a reply goes to the target's
+ *    DM with its scoped admin / global admin / owner, so the person who
+ *    runs that agent sees the exchange in their own chat.
  *
- * 3. **Newest active session**: legacy heuristic. Used when no prior a2a
- *    has been recorded with `source_session_id` (e.g. fresh installs,
- *    pre-migration data).
+ * 3. **Agent inbox**: with no approver DM, the target's inbox session (no
+ *    messaging group, created on demand). Never "whichever session is
+ *    newest" or "whichever session last talked to this peer": both pick a
+ *    member's chat (or a voice/CLI session nobody reads) for unrelated
+ *    traffic.
  */
 async function resolveTargetSession(
   msg: RoutableAgentMessage,
   sourceSession: Session,
   targetAgentGroupId: string,
 ): Promise<Session> {
-  const originSessionId = await withExistingMailboxSession(sourceSession.agent_group_id, sourceSession.id, (srcDb) => {
-    let origin: string | null = null;
-    if (msg.in_reply_to) {
-      origin = srcDb.getInboundSourceSessionId(msg.in_reply_to);
-    }
-    if (!origin) {
-      // Peer-affinity fallback — covers the case where the container's
-      // outbound write didn't carry in_reply_to (e.g. legacy MCP send_message
-      // path, container running pre-fix code).
-      origin = srcDb.getMostRecentPeerSourceSessionId(targetAgentGroupId);
-    }
-    return origin;
-  });
+  const replyTo = msg.in_reply_to;
+  const originSessionId = replyTo
+    ? await withExistingMailboxSession(sourceSession.agent_group_id, sourceSession.id, (srcDb) =>
+        srcDb.getInboundSourceSessionId(replyTo),
+      )
+    : null;
   if (originSessionId) {
     const candidate = await getSession(originSessionId);
     if (candidate && candidate.agent_group_id === targetAgentGroupId && candidate.status === 'active') {
       return candidate;
     }
   }
-  return (await resolveSession(targetAgentGroupId, null, null, 'agent-shared')).session;
+  const approverDm = await findApproverDmSession(targetAgentGroupId);
+  if (approverDm) return approverDm;
+  return (await resolveSession(targetAgentGroupId, null, null, 'shared')).session;
 }
 
 export async function routeAgentMessage(

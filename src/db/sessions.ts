@@ -59,6 +59,51 @@ export async function findSessionForAgent(
   );
 }
 
+/**
+ * An agent group's inbox: its active session with no messaging group and no
+ * thread. Holds agent-to-agent traffic that has no better home, so it never
+ * lands in a member's chat.
+ */
+export async function findAgentInboxSession(agentGroupId: string): Promise<Session | undefined> {
+  return getDb().get<Session>(
+    `SELECT * FROM sessions
+       WHERE agent_group_id = ?
+         AND status = 'active'
+         AND messaging_group_id IS NULL
+         AND thread_id IS NULL
+       ORDER BY created_at ASC
+       LIMIT 1`,
+    agentGroupId,
+  );
+}
+
+/**
+ * The active DM session between an agent group and one of its approvers
+ * (scoped admin, then global admin, then owner — the `pickApprover` order),
+ * found through `user_dms`. Most recently active first within a tier.
+ */
+export async function findApproverDmSession(agentGroupId: string): Promise<Session | undefined> {
+  return getDb().get<Session>(
+    `SELECT s.* FROM sessions s
+       JOIN user_dms d ON d.messaging_group_id = s.messaging_group_id
+       JOIN user_roles r ON r.user_id = d.user_id
+      WHERE s.agent_group_id = ?
+        AND s.status = 'active'
+        AND s.thread_id IS NULL
+        AND (r.role = 'owner' OR (r.role = 'admin' AND (r.agent_group_id IS NULL OR r.agent_group_id = ?)))
+      ORDER BY CASE
+                 WHEN r.role = 'admin' AND r.agent_group_id = ? THEN 0
+                 WHEN r.role = 'admin' THEN 1
+                 ELSE 2
+               END,
+               s.last_active DESC
+      LIMIT 1`,
+    agentGroupId,
+    agentGroupId,
+    agentGroupId,
+  );
+}
+
 /** Find an active session scoped to an agent group (ignoring messaging group). */
 export async function findSessionByAgentGroup(agentGroupId: string): Promise<Session | undefined> {
   return getDb().get<Session>(

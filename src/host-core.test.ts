@@ -1426,9 +1426,14 @@ describe('agent-to-agent routing', () => {
     // Researcher responds back to PA
     const { getSessionsByAgentGroup } = await import('./db/sessions.js');
     const researcherSession = (await getSessionsByAgentGroup('ag-researcher'))[0];
+    const researcherDb = new Database(inboundDbPath('ag-researcher', researcherSession.id));
+    const { id: requestId } = researcherDb.prepare("SELECT id FROM messages_in WHERE channel_type = 'agent'").get() as {
+      id: string;
+    };
+    researcherDb.close();
 
     await routeAgentMessage(
-      { id: 'out-reply', platform_id: 'ag-pa', content: JSON.stringify({ text: 'found it' }), in_reply_to: null },
+      { id: 'out-reply', platform_id: 'ag-pa', content: JSON.stringify({ text: 'found it' }), in_reply_to: requestId },
       researcherSession,
     );
 
