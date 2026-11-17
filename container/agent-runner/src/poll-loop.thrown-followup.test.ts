@@ -87,8 +87,13 @@ async function runFailure(
     cwd: '/workspace/agent',
     signal: controller.signal,
   });
-  expect(recovered).toBeInstanceOf(Error);
-  expect((recovered as Error).message).toBe(DIAGNOSTIC);
+  // A task run never resumes, so there is no continuation to judge stale.
+  if (initialKind === 'task') {
+    expect(recovered).toBeUndefined();
+  } else {
+    expect(recovered).toBeInstanceOf(Error);
+    expect((recovered as Error).message).toBe(DIAGNOSTIC);
+  }
   expect(getContinuation('mock')).toBeUndefined();
   expect(exchanges.at(-1)?.status).toBe('error');
   expect(exchanges.at(-1)?.result).toContain(DIAGNOSTIC);

@@ -254,6 +254,17 @@ export async function runPollLoop(config: PollLoopConfig): Promise<void> {
 
     log(`Processing ${keep.length} message(s), kinds: ${[...new Set(keep.map((m) => m.kind))].join(',')}`);
 
+    // A task run starts from a clean transcript. A series fires hours apart,
+    // so the prompt cache is always cold by the next run: resuming would
+    // re-send every earlier run's transcript at full price for context the
+    // run does not need. State a task wants to keep lives in workspace files
+    // and the series run log.
+    if (continuation && routing.taskRun) {
+      log(`Task run: starting fresh instead of resuming ${continuation}`);
+      continuation = undefined;
+      clearContinuation(config.providerName);
+    }
+
     const query = config.provider.query({
       prompt: providerPrompt,
       continuation,
