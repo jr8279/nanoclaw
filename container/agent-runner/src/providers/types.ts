@@ -55,6 +55,12 @@ export interface AgentProvider {
    * before it ever replies. Providers without an on-disk transcript omit this.
    */
   maybeRotateContinuation?(continuation: string, cwd: string): string | null;
+
+  /**
+   * After a rotation: the tail of the conversation that was dropped, as a
+   * notice for the fresh session's first chat prompt. Returned once.
+   */
+  takeRotationCarryover?(): string | undefined;
 }
 
 /** One prompt/result round-trip, as reported to `onExchangeComplete`. */

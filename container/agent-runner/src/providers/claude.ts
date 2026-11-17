@@ -1,6 +1,7 @@
 import { query as sdkQuery, type HookCallback, type PreCompactHookInput } from '@anthropic-ai/claude-agent-sdk';
 
 import { clearContainerToolInFlight, setContainerToolInFlight } from '../db/container-state.js';
+import { getTaskSeriesId } from '../db/session-routing.js';
 import type { MemorySessionHookRegistration } from '../memory/session-hook.js';
 import { readModelOverride } from '../model-override.js';
 import type { ResolvedRuntimeConfiguration } from '../provider-contracts/registry.js';
@@ -229,6 +230,15 @@ const CLAUDE_CODE_AUTO_COMPACT_WINDOW = process.env.CLAUDE_CODE_AUTO_COMPACT_WIN
  */
 const STALE_SESSION_RE = /no conversation found|ENOENT.*\.jsonl|session.*not found/i;
 
+/** False when the session routing cannot be read, so a chat is never mistaken for a task. */
+function isTaskSession(): boolean {
+  try {
+    return !!getTaskSeriesId();
+  } catch {
+    return false;
+  }
+}
+
 export class ClaudeProvider implements AgentProvider {
   private assistantName?: string;
   private mcp: ReturnType<typeof resolveClaudeMcpServers>;
@@ -237,6 +247,7 @@ export class ClaudeProvider implements AgentProvider {
   private env: Record<string, string | undefined>;
   private additionalDirectories?: string[];
   private memorySessionHook?: MemorySessionHookRegistration;
+  private rotationCarryover?: string;
 
   /**
    * `configuration` is the contract's configuration as resolved by core
@@ -278,7 +289,26 @@ export class ClaudeProvider implements AgentProvider {
    * cold-resume within the host's idle ceiling (see claude-history.ts).
    */
   maybeRotateContinuation(continuation: string, _cwd: string): string | null {
-    return rotateClaudeContinuation({ continuation, assistantName: this.assistantName, log }, REAL_CLOCK);
+    this.rotationCarryover = undefined;
+    return rotateClaudeContinuation(
+      {
+        continuation,
+        assistantName: this.assistantName,
+        log,
+        // A task session starts every run fresh; leave its transcript alone.
+        idleRotation: !isTaskSession(),
+        onCarryover: (carryover) => {
+          this.rotationCarryover = carryover;
+        },
+      },
+      REAL_CLOCK,
+    );
+  }
+
+  takeRotationCarryover(): string | undefined {
+    const carryover = this.rotationCarryover;
+    this.rotationCarryover = undefined;
+    return carryover;
   }
 
   query(input: QueryInput): AgentQuery {

@@ -131,4 +131,52 @@ describe('claude maybeRotateContinuation', () => {
     const provider = createProvider('claude');
     expect(provider.maybeRotateContinuation!('does-not-exist', CWD)).toBeNull();
   });
+
+  function writeChat(sessionId: string, idleHours: number): string {
+    const dir = path.join(tmp, '.claude', 'projects', PROJECT_DIR);
+    fs.mkdirSync(dir, { recursive: true });
+    const p = path.join(dir, `${sessionId}.jsonl`);
+    const now = new Date().toISOString();
+    const lines = [
+      { type: 'user', timestamp: now, message: { role: 'user', content: 'What time is the game on Saturday?' } },
+      { type: 'assistant', timestamp: now, message: { content: [{ type: 'text', text: 'Ten in the morning.' }] } },
+    ];
+    fs.writeFileSync(p, lines.map((l) => JSON.stringify(l)).join('\n') + '\n');
+    const touched = new Date(Date.now() - idleHours * 3_600_000);
+    fs.utimesSync(p, touched, touched);
+    return p;
+  }
+
+  it('rotates a chat transcript idle past the cap and hands over its last exchanges once', () => {
+    const p = writeChat('sess-idle', 5);
+    const provider = createProvider('claude', { assistantName: 'Sophia' });
+    expect(provider.maybeRotateContinuation!('sess-idle', CWD)).toContain('idle');
+    expect(fs.existsSync(p)).toBe(false);
+    const carryover = provider.takeRotationCarryover!();
+    expect(carryover).toContain('User: What time is the game on Saturday?');
+    expect(carryover).toContain('Sophia: Ten in the morning.');
+    expect(provider.takeRotationCarryover!()).toBeUndefined();
+  });
+
+  it('keeps a chat transcript that was active inside the idle cap', () => {
+    const p = writeChat('sess-warm', 1);
+    const provider = createProvider('claude');
+    expect(provider.maybeRotateContinuation!('sess-warm', CWD)).toBeNull();
+    expect(fs.existsSync(p)).toBe(true);
+    expect(provider.takeRotationCarryover!()).toBeUndefined();
+  });
+
+  it('never idle-rotates when CLAUDE_TRANSCRIPT_ROTATE_IDLE_HOURS is 0', () => {
+    const prev = process.env.CLAUDE_TRANSCRIPT_ROTATE_IDLE_HOURS;
+    process.env.CLAUDE_TRANSCRIPT_ROTATE_IDLE_HOURS = '0';
+    try {
+      const p = writeChat('sess-off', 48);
+      const provider = createProvider('claude');
+      expect(provider.maybeRotateContinuation!('sess-off', CWD)).toBeNull();
+      expect(fs.existsSync(p)).toBe(true);
+    } finally {
+      if (prev === undefined) delete process.env.CLAUDE_TRANSCRIPT_ROTATE_IDLE_HOURS;
+      else process.env.CLAUDE_TRANSCRIPT_ROTATE_IDLE_HOURS = prev;
+    }
+  });
 });

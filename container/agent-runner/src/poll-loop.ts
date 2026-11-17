@@ -33,7 +33,12 @@ import { stripHarnessTagArtifacts } from './harness-tag-strip.js';
 import { isUploadTraceCommand, uploadTrace } from './upload-trace.js';
 import { extractImageBlocks } from './image-attachments.js';
 import type { AgentProvider, AgentQuery, ProviderEvent, ProviderExchange } from './providers/types.js';
-import { clearModelOverride, isAutoModelOverride, readModelOverride, touchAutoModelOverride } from './model-override.js';
+import {
+  clearModelOverride,
+  isAutoModelOverride,
+  readModelOverride,
+  touchAutoModelOverride,
+} from './model-override.js';
 import type { ProviderRuntimeContract } from './provider-contracts/registry.js';
 
 const POLL_INTERVAL_MS = 1000;
@@ -101,6 +106,7 @@ export async function runPollLoop(config: PollLoopConfig): Promise<void> {
   // other providers may reload a thread ID, etc.). Keyed per-provider so
   // a Codex thread id never gets handed to Claude or vice versa.
   let continuation: string | undefined = migrateLegacyContinuation(config.providerName);
+  let rotationCarryover: string | undefined;
 
   // Before resuming, drop a session whose on-disk transcript has grown too
   // large/old to cold-resume within the host's idle ceiling. Without this a
@@ -112,6 +118,7 @@ export async function runPollLoop(config: PollLoopConfig): Promise<void> {
       log(`Rotating session — ${rotateReason}; starting fresh`);
       clearContinuation(config.providerName);
       continuation = undefined;
+      rotationCarryover = config.provider.takeRotationCarryover?.();
     }
   }
 
@@ -125,7 +132,7 @@ export async function runPollLoop(config: PollLoopConfig): Promise<void> {
   // Same for the reply stamp a killed container left behind (see session-state.ts).
   clearCurrentReplyRoute();
 
-  let startupNotice = config.startupNotice;
+  let startupNotice = [config.startupNotice, rotationCarryover].filter(Boolean).join('\n\n') || undefined;
   let pollCount = 0;
   let isFirstPoll = true;
   while (true) {

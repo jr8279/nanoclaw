@@ -31,6 +31,15 @@ export interface ClaudeContinuationRotationInput {
   continuation: string;
   assistantName?: string;
   log(message: string): void;
+  /**
+   * Also rotate a transcript nobody has touched for
+   * `CLAUDE_TRANSCRIPT_ROTATE_IDLE_HOURS` (default 4; 0 turns it off). By
+   * then the prompt cache is long cold, so resuming would re-send the whole
+   * history at full price. Chat sessions only: a task run starts fresh anyway.
+   */
+  idleRotation?: boolean;
+  /** Receives the tail of the rotated conversation, to hand to the fresh session. */
+  onCarryover?(carryover: string): void;
 }
 
 interface ClaudeArchivePlan {
@@ -224,15 +233,29 @@ export function rotateClaudeContinuation(
   if (!transcriptPath) return null;
 
   try {
-    const size = fs.statSync(transcriptPath).size;
+    const stat = fs.statSync(transcriptPath);
+    const size = stat.size;
+    const idleSince = input.idleRotation ? stat.mtimeMs : null;
     let firstLine = '';
     try {
       firstLine = readFirstLine(transcriptPath);
     } catch {
       // Size-only rotation must survive an unreadable first entry.
     }
-    const decision = decideContinuationRotation({ size, firstLine }, fx);
+    const decision = decideContinuationRotation({ size, firstLine, idleSince }, fx);
     if (!decision?.reason) return null;
+
+    if (input.onCarryover) {
+      try {
+        const carryover = formatCarryover(
+          parseTranscript(fs.readFileSync(transcriptPath, 'utf-8')),
+          input.assistantName,
+        );
+        if (carryover) input.onCarryover(carryover);
+      } catch {
+        // The carryover is a courtesy; rotation must not depend on it.
+      }
+    }
 
     archiveClaudeTranscript(
       {
@@ -255,9 +278,12 @@ export function rotateClaudeContinuation(
 }
 
 function decideContinuationRotation(
-  input: { size: number; firstLine: string },
+  input: { size: number; firstLine: string; idleSince: number | null },
   fx: ClaudeHistoryClock,
 ): ClaudeContinuationRotationDecision | null {
+  const rawIdle = process.env.CLAUDE_TRANSCRIPT_ROTATE_IDLE_HOURS;
+  const idleHours = rawIdle === undefined || rawIdle.trim() === '' ? 4 : Number(rawIdle);
+  const maxIdleMs = Number.isFinite(idleHours) && idleHours > 0 ? idleHours * 3_600_000 : Infinity;
   const maxBytes = Number(process.env.CLAUDE_TRANSCRIPT_ROTATE_BYTES) || 12 * 1024 * 1024;
   const rawDays = process.env.CLAUDE_TRANSCRIPT_ROTATE_AGE_DAYS;
   const days = rawDays === undefined || rawDays.trim() === '' ? 14 : Number(rawDays);
@@ -282,7 +308,45 @@ function decideContinuationRotation(
       reason: `transcript ${(ageMs / 86_400_000).toFixed(1)}d old > ${(maxAgeMs / 86_400_000).toFixed(0)}d cap`,
     };
   }
+  const idleMs = input.idleSince === null ? 0 : fx.now() - input.idleSince;
+  if (idleMs > maxIdleMs) {
+    return {
+      reason: `conversation idle ${(idleMs / 3_600_000).toFixed(1)}h > ${(maxIdleMs / 3_600_000).toFixed(0)}h cap`,
+    };
+  }
   return null;
+}
+
+const CARRYOVER_MESSAGES = 12;
+const CARRYOVER_MESSAGE_CHARS = 500;
+const CARRYOVER_TOTAL_CHARS = 5000;
+
+/**
+ * The last few exchanges of a rotated conversation, trimmed, as a notice for
+ * the fresh session's first prompt. The full transcript is in the archive.
+ */
+function formatCarryover(messages: ParsedMessage[], assistantName: string | undefined): string | null {
+  const lines: string[] = [];
+  let total = 0;
+  for (const message of messages.slice(-CARRYOVER_MESSAGES).reverse()) {
+    const text = message.content.trim().replace(/\s+/g, ' ');
+    if (!text) continue;
+    const clipped = text.length > CARRYOVER_MESSAGE_CHARS ? `${text.slice(0, CARRYOVER_MESSAGE_CHARS)}...` : text;
+    const line = `${message.role === 'user' ? 'User' : assistantName || 'Assistant'}: ${clipped}`;
+    if (total + line.length > CARRYOVER_TOTAL_CHARS) break;
+    total += line.length;
+    lines.unshift(line);
+  }
+  if (lines.length === 0) return null;
+  return [
+    '[System notice: this conversation sat idle, so it restarted with a clean context. ' +
+      'The last exchanges of the previous conversation are below for continuity. ' +
+      'The full transcript is archived under /workspace/agent/conversations/; search there if the user refers to something older. ' +
+      'Carry on naturally and do not mention the restart unless asked.]',
+    '<previous-conversation>',
+    ...lines,
+    '</previous-conversation>',
+  ].join('\n');
 }
 
 function findContinuationFile(root: string, fileName: string): string | null {
