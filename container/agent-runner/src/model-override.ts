@@ -14,9 +14,11 @@
  */
 import fs from 'fs';
 
-const OVERRIDE_PATH = process.env.MODEL_OVERRIDE_PATH || '/workspace/.model-override';
-const AUTO_MARKER_PATH = `${OVERRIDE_PATH}-auto`;
-const AUTO_LEDGER_PATH = `${OVERRIDE_PATH}-auto-ledger.json`;
+// Resolved on every call, not once at import: whichever module imports this
+// file first must not pin the paths for everything loaded after it.
+const overridePath = (): string => process.env.MODEL_OVERRIDE_PATH || '/workspace/.model-override';
+const autoMarkerPath = (): string => `${overridePath()}-auto`;
+const autoLedgerPath = (): string => `${overridePath()}-auto-ledger.json`;
 
 /** Friendly names the tool accepts, mapped to concrete model IDs. */
 export const MODEL_ALIASES: Record<string, string> = {
@@ -35,7 +37,7 @@ export const AUTO_OPUS_DAILY_CAP = Number(process.env.MODEL_AUTO_OPUS_DAILY_CAP)
 
 function readAutoMarker(): { expiresAt: number } | undefined {
   try {
-    const parsed = JSON.parse(fs.readFileSync(AUTO_MARKER_PATH, 'utf8')) as { expiresAt?: unknown };
+    const parsed = JSON.parse(fs.readFileSync(autoMarkerPath(), 'utf8')) as { expiresAt?: unknown };
     return typeof parsed.expiresAt === 'number' ? { expiresAt: parsed.expiresAt } : undefined;
   } catch {
     return undefined;
@@ -46,7 +48,7 @@ function readAutoMarker(): { expiresAt: number } | undefined {
 export function readModelOverride(now = Date.now()): string | undefined {
   let model: string | undefined;
   try {
-    model = fs.readFileSync(OVERRIDE_PATH, 'utf8').trim() || undefined;
+    model = fs.readFileSync(overridePath(), 'utf8').trim() || undefined;
   } catch {
     return undefined;
   }
@@ -60,29 +62,29 @@ export function readModelOverride(now = Date.now()): string | undefined {
 
 /** User-requested override: sticky, no expiry. */
 export function writeModelOverride(model: string): void {
-  fs.rmSync(AUTO_MARKER_PATH, { force: true });
-  fs.writeFileSync(OVERRIDE_PATH, `${model}\n`);
+  fs.rmSync(autoMarkerPath(), { force: true });
+  fs.writeFileSync(overridePath(), `${model}\n`);
 }
 
 /** Agent-chosen override: expires once the work goes quiet. */
 export function writeAutoModelOverride(model: string, now = Date.now()): void {
-  fs.writeFileSync(OVERRIDE_PATH, `${model}\n`);
-  fs.writeFileSync(AUTO_MARKER_PATH, JSON.stringify({ expiresAt: now + AUTO_OVERRIDE_INITIAL_MS }));
+  fs.writeFileSync(overridePath(), `${model}\n`);
+  fs.writeFileSync(autoMarkerPath(), JSON.stringify({ expiresAt: now + AUTO_OVERRIDE_INITIAL_MS }));
 }
 
 export function isAutoModelOverride(): boolean {
-  return readAutoMarker() !== undefined && fs.existsSync(OVERRIDE_PATH);
+  return readAutoMarker() !== undefined && fs.existsSync(overridePath());
 }
 
 /** Turn finished on an auto override: restart its idle clock. */
 export function touchAutoModelOverride(now = Date.now()): void {
   if (!isAutoModelOverride()) return;
-  fs.writeFileSync(AUTO_MARKER_PATH, JSON.stringify({ expiresAt: now + AUTO_OVERRIDE_IDLE_MS }));
+  fs.writeFileSync(autoMarkerPath(), JSON.stringify({ expiresAt: now + AUTO_OVERRIDE_IDLE_MS }));
 }
 
 export function clearModelOverride(): void {
-  fs.rmSync(OVERRIDE_PATH, { force: true });
-  fs.rmSync(AUTO_MARKER_PATH, { force: true });
+  fs.rmSync(overridePath(), { force: true });
+  fs.rmSync(autoMarkerPath(), { force: true });
 }
 
 function localDay(now: number): string {
@@ -92,7 +94,7 @@ function localDay(now: number): string {
 /** Self-initiated opus switches already made today. */
 export function autoOpusUsedToday(now = Date.now()): number {
   try {
-    const ledger = JSON.parse(fs.readFileSync(AUTO_LEDGER_PATH, 'utf8')) as { day?: string; count?: number };
+    const ledger = JSON.parse(fs.readFileSync(autoLedgerPath(), 'utf8')) as { day?: string; count?: number };
     return ledger.day === localDay(now) && typeof ledger.count === 'number' ? ledger.count : 0;
   } catch {
     return 0;
@@ -100,5 +102,5 @@ export function autoOpusUsedToday(now = Date.now()): number {
 }
 
 export function recordAutoOpus(now = Date.now()): void {
-  fs.writeFileSync(AUTO_LEDGER_PATH, JSON.stringify({ day: localDay(now), count: autoOpusUsedToday(now) + 1 }));
+  fs.writeFileSync(autoLedgerPath(), JSON.stringify({ day: localDay(now), count: autoOpusUsedToday(now) + 1 }));
 }
